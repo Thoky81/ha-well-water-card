@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v10
+ * Well Water Level Card  — v11
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=10   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=11   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -30,6 +30,7 @@
  *   well_position: left     # left | right | top | bottom
  *   font_size: normal       # small | normal | large
  *   show_title: true        # false hides the card title
+ *   show_minmax: true       # false hides the Min / Max row at the bottom
  *   color: "#1e88e5"        # water tint for the "ok" state (warn/empty/full still win)
  *   # custom theme colors (only when theme: custom):
  *   card_background: "#0d1b2a"
@@ -265,6 +266,7 @@ class WellWaterCard extends HTMLElement {
         dual_arrangement: config.dual_arrangement || "side_by_side",
         font_size:        config.font_size       || "normal",
         show_title:       config.show_title !== false,
+        show_minmax:      config.show_minmax !== false,
         card_background:  config.card_background  || null,
         card_border:      config.card_border      || null,
         text_color:       config.text_color       || null,
@@ -291,6 +293,7 @@ class WellWaterCard extends HTMLElement {
         well_position:   "left",
         font_size:       "normal",
         show_title:      true,
+        show_minmax:     true,
         card_background: null,
         card_border:     null,
         text_color:      null,
@@ -426,7 +429,7 @@ class WellWaterCard extends HTMLElement {
 
     const ticksSvg = ticks.map(t =>
       "<line x1='16' y1='" + t.y + "' x2='25' y2='" + t.y + "' stroke='" + shaft.tick + "' stroke-width='1'/>" +
-      "<text x='14' y='" + (t.y + 3) + "' text-anchor='end' font-size='7' fill='" + shaft.tickTxt + "' font-family='monospace'>" + t.v + "</text>"
+      "<text x='14' y='" + (t.y + 3.5) + "' text-anchor='end' font-size='9' fill='" + shaft.tickTxt + "' font-family='monospace'>" + t.v + "</text>"
     ).join("");
 
     const levelLine = level !== null
@@ -434,12 +437,14 @@ class WellWaterCard extends HTMLElement {
         "<polygon points='78," + fillY + " 83," + (fillY-4) + " 83," + (fillY+4) + "' fill='" + col + "' opacity='.9'/>"
       : "";
 
+    // Level number rendered OUTSIDE the shaft to the right. The SVG viewBox
+    // is wider than the shaft so the whole number (incl. decimals) has room.
     const levelLabel = (level !== null && fillH > 20)
-      ? "<text x='88' y='" + (fillY + 4) + "' font-size='8' fill='" + col + "' font-family='monospace' opacity='.85'>" + uFmt(level, unit) + "</text>"
+      ? "<text x='88' y='" + (fillY + 5) + "' font-size='13' font-weight='700' fill='" + col + "' font-family='monospace' opacity='.92'>" + uFmt(level, unit) + "</text>"
       : "";
 
     return (
-      "<svg width='100' height='260' viewBox='0 0 100 260'>" +
+      "<svg width='130' height='260' viewBox='0 0 130 260'>" +
       "<defs>" +
         "<clipPath id='_sc'><rect x='26' y='30' width='48' height='200' rx='2'/></clipPath>" +
         "<linearGradient id='_wg' x1='0' y1='0' x2='0' y2='1'>" +
@@ -454,7 +459,7 @@ class WellWaterCard extends HTMLElement {
         "<filter id='_gl'><feGaussianBlur stdDeviation='3' result='b'/><feMerge><feMergeNode in='b'/><feMergeNode in='SourceGraphic'/></feMerge></filter>" +
       "</defs>" +
       ticksSvg +
-      "<text x='7' y='135' text-anchor='middle' font-size='7' fill='" + shaft.tick + "' font-family='monospace' transform='rotate(-90 7 135)'>" + uLabel(unit) + "</text>" +
+      "<text x='7' y='135' text-anchor='middle' font-size='8' fill='" + shaft.tick + "' font-family='monospace' transform='rotate(-90 7 135)'>" + uLabel(unit) + "</text>" +
       "<rect x='26' y='30'  width='6'  height='200' fill='url(#_sg)' rx='2'/>" +
       "<rect x='68' y='30'  width='6'  height='200' fill='" + shaft.wallR + "' rx='2'/>" +
       "<rect x='20' y='22'  width='60' height='10'  fill='" + shaft.cap    + "' rx='3'/>" +
@@ -490,7 +495,7 @@ class WellWaterCard extends HTMLElement {
 
     const ticksSvg = ticks.map(t =>
       "<line x1='5' y1='" + t.y + "' x2='" + (SX-1) + "' y2='" + t.y + "' stroke='" + shaft.tick + "' stroke-width='1'/>" +
-      "<text x='4' y='" + (t.y + 3) + "' text-anchor='end' font-size='6.5' fill='" + shaft.tickTxt + "' font-family='monospace'>" + t.v + "</text>"
+      "<text x='4' y='" + (t.y + 3) + "' text-anchor='end' font-size='8' fill='" + shaft.tickTxt + "' font-family='monospace'>" + t.v + "</text>"
     ).join("");
 
     const levelLine = level !== null
@@ -499,13 +504,13 @@ class WellWaterCard extends HTMLElement {
       : "";
 
     const levelLabel = (level !== null && fillH > 15)
-      ? "<text x='" + (SX+SW+11) + "' y='" + (fillY+3.5) + "' font-size='7' fill='" + col + "' font-family='monospace' opacity='.85'>" + uFmt(level, unit) + "</text>"
+      ? "<text x='" + (SX+SW+11) + "' y='" + (fillY+4) + "' font-size='11' font-weight='700' fill='" + col + "' font-family='monospace' opacity='.92'>" + uFmt(level, unit) + "</text>"
       : "";
 
     const pipeX = SX + Math.floor(SW / 2);
 
     return (
-      "<svg width='80' height='215' viewBox='0 0 80 215'>" +
+      "<svg width='110' height='215' viewBox='0 0 110 215'>" +
       "<defs>" +
         "<clipPath id='" + I + "c'><rect x='" + SX + "' y='" + SY + "' width='" + SW + "' height='" + SH + "' rx='2'/></clipPath>" +
         "<linearGradient id='" + I + "wg' x1='0' y1='0' x2='0' y2='1'>" +
@@ -559,9 +564,11 @@ class WellWaterCard extends HTMLElement {
       y: SB - f * SH,
       v: uFmt(d.min + (d.max - d.min) * f, unit),
     }));
+    const tickFs  = SH > 170 ? 9 : 8;
+    const labelFs = SH > 170 ? 13 : 11;
     const ticksSvg = ticks.map(tk =>
       "<line x1='" + (SX - 10) + "' y1='" + tk.y + "' x2='" + (SX - 1) + "' y2='" + tk.y + "' stroke='" + shaft.tick + "' stroke-width='1'/>" +
-      "<text x='" + (SX - 12) + "' y='" + (tk.y + 3) + "' text-anchor='end' font-size='7' fill='" + shaft.tickTxt + "' font-family='monospace'>" + tk.v + "</text>"
+      "<text x='" + (SX - 12) + "' y='" + (tk.y + 3.5) + "' text-anchor='end' font-size='" + tickFs + "' fill='" + shaft.tickTxt + "' font-family='monospace'>" + tk.v + "</text>"
     ).join("");
 
     const levelLine = level !== null
@@ -569,7 +576,7 @@ class WellWaterCard extends HTMLElement {
         "<polygon points='" + (SX + SW + 4) + "," + fillY + " " + (SX + SW + 9) + "," + (fillY - 4) + " " + (SX + SW + 9) + "," + (fillY + 4) + "' fill='" + col + "' opacity='.9'/>"
       : "";
     const levelLabel = (level !== null && fillH > 20)
-      ? "<text x='" + (SX + SW + 14) + "' y='" + (fillY + 4) + "' font-size='8' fill='" + col + "' font-family='monospace' opacity='.85'>" + uFmt(level, unit) + "</text>"
+      ? "<text x='" + (SX + SW + 14) + "' y='" + (fillY + 5) + "' font-size='" + labelFs + "' font-weight='700' fill='" + col + "' font-family='monospace' opacity='.92'>" + uFmt(level, unit) + "</text>"
       : "";
 
     return {
@@ -602,7 +609,7 @@ class WellWaterCard extends HTMLElement {
     const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, "_p");
     const stone = "url(#_pstone)";
     return (
-      "<svg width='100' height='290' viewBox='0 0 100 290'>" +
+      "<svg width='130' height='290' viewBox='0 0 130 290'>" +
       "<defs>" +
         i.defs +
         "<linearGradient id='_pstone' x1='0' y1='0' x2='1' y2='0'>" +
@@ -657,7 +664,7 @@ class WellWaterCard extends HTMLElement {
     const I = "p" + idx;
     const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, I);
     return (
-      "<svg width='80' height='230' viewBox='0 0 80 230'>" +
+      "<svg width='110' height='230' viewBox='0 0 110 230'>" +
       "<defs>" +
         i.defs +
         "<linearGradient id='" + I + "stone' x1='0' y1='0' x2='1' y2='0'>" +
@@ -693,7 +700,7 @@ class WellWaterCard extends HTMLElement {
     const stone = "url(#_rstone)";
     const wood  = "url(#_rwood)";
     return (
-      "<svg width='100' height='290' viewBox='0 0 100 290'>" +
+      "<svg width='130' height='290' viewBox='0 0 130 290'>" +
       "<defs>" +
         i.defs +
         "<linearGradient id='_rstone' x1='0' y1='0' x2='1' y2='0'>" +
@@ -748,7 +755,7 @@ class WellWaterCard extends HTMLElement {
     const I = "r" + idx;
     const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, I);
     return (
-      "<svg width='80' height='230' viewBox='0 0 80 230'>" +
+      "<svg width='110' height='230' viewBox='0 0 110 230'>" +
       "<defs>" +
         i.defs +
         "<linearGradient id='" + I + "stone' x1='0' y1='0' x2='1' y2='0'><stop offset='0%' stop-color='#5a6876'/><stop offset='100%' stop-color='#2a323b'/></linearGradient>" +
@@ -780,7 +787,7 @@ class WellWaterCard extends HTMLElement {
     const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, "_c");
     const wood = "url(#_cwood)";
     return (
-      "<svg width='100' height='290' viewBox='0 0 100 290'>" +
+      "<svg width='130' height='290' viewBox='0 0 130 290'>" +
       "<defs>" +
         i.defs +
         "<linearGradient id='_cwood' x1='0' y1='0' x2='1' y2='0'>" +
@@ -834,7 +841,7 @@ class WellWaterCard extends HTMLElement {
     const I = "k" + idx;
     const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, I);
     return (
-      "<svg width='80' height='230' viewBox='0 0 80 230'>" +
+      "<svg width='110' height='230' viewBox='0 0 110 230'>" +
       "<defs>" +
         i.defs +
         "<linearGradient id='" + I + "wood' x1='0' y1='0' x2='1' y2='0'><stop offset='0%' stop-color='#8a5f3a'/><stop offset='100%' stop-color='#3a2618'/></linearGradient>" +
@@ -910,6 +917,23 @@ class WellWaterCard extends HTMLElement {
         "</div></div>"
       : "";
 
+    // Bottom row: Min / Max (toggle via show_minmax) and Pump (always visible
+    // when entity_pump is set). If both are hidden we also drop the divider,
+    // otherwise the card ends with an orphan line.
+    const showMinMax = this._config.show_minmax !== false;
+    const minMaxHtml = showMinMax
+      ? "<div class='mi'><div class='ml'>Min</div><div class='mv'>" + uFmt(d.min, unit) + " " + ul + "</div></div>" +
+        "<div class='mi'><div class='ml'>Max</div><div class='mv'>" + uFmt(d.max, unit) + " " + ul + "</div></div>"
+      : "";
+    const hasBottom = showMinMax || pumpHtml;
+    const bottomRow = hasBottom
+      ? "<div class='divider'></div>" +
+        "<div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;'>" +
+          minMaxHtml +
+          pumpHtml +
+        "</div>"
+      : "";
+
     return (
       "<div style='font-size:" + (compact?"8px":"9px") + ";letter-spacing:.12em;text-transform:uppercase;color:" + t.textMuted + ";margin-bottom:2px;'>" + lbl + "</div>" +
       "<div style='font-size:" + fsBig + ";font-weight:700;color:" + col + ";line-height:1;letter-spacing:-.02em;text-shadow:0 0 20px " + glow + ";'>" +
@@ -920,12 +944,7 @@ class WellWaterCard extends HTMLElement {
         (level !== null ? Math.round(pct) + "% capacity" : "—") +
       "</div>" +
       "<div class='bar-w'><div class='bar-f' style='width:" + pct + "%;background:linear-gradient(90deg," + col + "88," + col + ");'></div></div>" +
-      "<div class='divider'></div>" +
-      "<div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;'>" +
-        "<div class='mi'><div class='ml'>Min</div><div class='mv'>" + uFmt(d.min, unit) + " " + ul + "</div></div>" +
-        "<div class='mi'><div class='ml'>Max</div><div class='mv'>" + uFmt(d.max, unit) + " " + ul + "</div></div>" +
-        pumpHtml +
-      "</div>"
+      bottomRow
     );
   }
 
@@ -1267,20 +1286,20 @@ class WellWaterCardEditor extends HTMLElement {
         .ed {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 12px 16px;
+          gap: 14px 18px;
           padding: 4px 0;
           font-family: var(--primary-font-family, sans-serif);
         }
         .full { grid-column: 1 / -1; }
-        label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--secondary-text-color); }
-        label span, .picker-label { font-weight: 600; font-size: 11px; color: var(--secondary-text-color); }
+        label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--secondary-text-color); }
+        label span, .picker-label { font-weight: 600; font-size: 13px; color: var(--secondary-text-color); }
         input, select {
-          padding: 8px 10px;
+          padding: 10px 12px;
           border-radius: 6px;
           border: 1px solid var(--divider-color, #e0e0e0);
           background: var(--card-background-color, #fff);
           color: var(--primary-text-color);
-          font-size: 13px;
+          font-size: 15px;
           font-family: inherit;
           outline: none;
           transition: border-color 0.2s;
@@ -1289,24 +1308,24 @@ class WellWaterCardEditor extends HTMLElement {
         select { cursor: pointer; }
         .sec {
           grid-column: 1 / -1;
-          font-size: 10px; font-weight: 700;
+          font-size: 12px; font-weight: 700;
           letter-spacing: 0.12em; text-transform: uppercase;
           color: var(--primary-color, #1e88e5);
           border-top: 1px solid var(--divider-color, #e0e0e0);
-          padding-top: 10px; margin-top: 4px;
+          padding-top: 12px; margin-top: 4px;
         }
-        .conv { grid-column: 1 / -1; font-size: 11px; color: var(--secondary-text-color); opacity: 0.6; margin-top: -4px; }
-        .hint { grid-column: 1 / -1; font-size: 11px; color: var(--secondary-text-color); opacity: 0.65; border-top: 1px solid var(--divider-color, #e0e0e0); padding-top: 10px; line-height: 1.6; }
-        .well-block { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; background: var(--secondary-background-color, rgba(0,0,0,.04)); border-radius: 8px; padding: 12px 14px; margin-top: 2px; }
-        .wb-title { grid-column: 1 / -1; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--primary-color, #1e88e5); margin-bottom: 2px; }
-        .picker-wrap { display: flex; flex-direction: column; gap: 4px; }
+        .conv { grid-column: 1 / -1; font-size: 13px; color: var(--secondary-text-color); opacity: 0.7; margin-top: -4px; }
+        .hint { grid-column: 1 / -1; font-size: 13px; color: var(--secondary-text-color); opacity: 0.7; border-top: 1px solid var(--divider-color, #e0e0e0); padding-top: 12px; line-height: 1.6; }
+        .well-block { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; background: var(--secondary-background-color, rgba(0,0,0,.04)); border-radius: 8px; padding: 14px 16px; margin-top: 2px; }
+        .wb-title { grid-column: 1 / -1; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--primary-color, #1e88e5); margin-bottom: 4px; }
+        .picker-wrap { display: flex; flex-direction: column; gap: 6px; }
         ha-entity-picker { display: block; }
         .crow { display: flex; gap: 8px; align-items: center; }
         .crow input[type=text] { flex: 1; }
-        .crow input[type=color] { width: 38px; height: 38px; border-radius: 5px; border: 1px solid var(--divider-color); padding: 2px; cursor: pointer; background: none; flex-shrink: 0; }
-        label.cb { flex-direction: row; align-items: center; gap: 8px; cursor: pointer; }
-        label.cb input[type=checkbox] { width: 16px; height: 16px; margin: 0; cursor: pointer; }
-        label.cb span { font-size: 12px; font-weight: 600; color: var(--primary-text-color); }
+        .crow input[type=color] { width: 42px; height: 42px; border-radius: 5px; border: 1px solid var(--divider-color); padding: 2px; cursor: pointer; background: none; flex-shrink: 0; }
+        label.cb { flex-direction: row; align-items: center; gap: 10px; cursor: pointer; }
+        label.cb input[type=checkbox] { width: 18px; height: 18px; margin: 0; cursor: pointer; }
+        label.cb span { font-size: 14px; font-weight: 600; color: var(--primary-text-color); }
       </style>
 
       <div class="ed">
@@ -1361,6 +1380,7 @@ class WellWaterCardEditor extends HTMLElement {
             ${opt("large",  "Large")}
           </select></label>
         <label class="cb full"><input id="show_title" type="checkbox"><span>Show card title</span></label>
+        <label class="cb full"><input id="show_minmax" type="checkbox"><span>Show Min / Max at the bottom</span></label>
 
         ${layout === "single" ? `
           <label class="full"><span>Water color (OK state)</span><div class="crow">
@@ -1451,6 +1471,7 @@ class WellWaterCardEditor extends HTMLElement {
     sv("dual_arrangement", c.dual_arrangement || "side_by_side");
     sv("font_size",        c.font_size        || "normal");
     cb("show_title",       c.show_title);
+    cb("show_minmax",      c.show_minmax);
 
     if (layout !== "dual") {
       sv("sensor_unit",  c.sensor_unit  || "m");
@@ -1555,11 +1576,13 @@ class WellWaterCardEditor extends HTMLElement {
      "card_background","card_border","text_color","title_color"
     ].forEach(f => onchange(f, f, null));
 
-    // Show-title checkbox — different event + .checked instead of .value
-    const showTitleEl = this.shadowRoot.getElementById("show_title");
-    if (showTitleEl) {
-      showTitleEl.addEventListener("change", () => this._set("show_title", showTitleEl.checked));
-    }
+    // Checkbox fields use .checked instead of .value.
+    const bindCb = (id, field) => {
+      const el = this.shadowRoot.getElementById(id);
+      if (el) el.addEventListener("change", () => this._set(field, el.checked));
+    };
+    bindCb("show_title",  "show_title");
+    bindCb("show_minmax", "show_minmax");
 
     // Colour wheel → sync text input. Also routes per-well colour wheels
     // (data-for="w0_color" / "w1_color") to _setWell.
