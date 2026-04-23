@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v20
+ * Well Water Level Card  — v21
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=20   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=21   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -1443,8 +1443,12 @@ class WellWaterCard extends HTMLElement {
 
   _css(t) {
     return (
-      ":host { display: block; font-family: 'JetBrains Mono', 'Courier New', monospace; }" +
-      ".card { background: " + t.cardBg + "; border: " + t.cardBorder + "; border-radius: 16px; color: " + t.textBody + "; position: relative; overflow: hidden; }" +
+      // height:100% on host + ha-card makes the card fill its grid cell in
+      // the Sections view when HA assigns a specific row count. Default
+      // dashboards aren't affected because the parent has no forced height.
+      ":host { display: block; height: 100%; font-family: 'JetBrains Mono', 'Courier New', monospace; }" +
+      "ha-card { display: block; height: 100%; }" +
+      ".card { background: " + t.cardBg + "; border: " + t.cardBorder + "; border-radius: 16px; color: " + t.textBody + "; position: relative; overflow: hidden; box-sizing: border-box; }" +
       ".card::before { content: ''; position: absolute; inset: 0; background: " + t.glow + "; pointer-events: none; }" +
       ".divider { height: 1px; background: " + t.divider + "; margin: 11px 0; }" +
       ".bar-w { height: 4px; background: " + t.barBg + "; border-radius: 2px; overflow: hidden; }" +
@@ -1686,6 +1690,34 @@ class WellWaterCard extends HTMLElement {
 
   getCardSize() {
     return this._config && this._config.layout === "dual" ? 5 : 4;
+  }
+
+  // Declare grid behaviour for the Sections view. Silences the "does not fully
+  // support resizing" warning and gives HA sensible defaults + bounds. Rows
+  // are "auto" so the card grows with its content (title, readings, history
+  // chart) instead of getting clipped or padded.
+  getGridOptions() {
+    const c = this._config || {};
+    const isDual = c.layout === "dual";
+    return {
+      columns:     isDual ? 12 : 6,
+      rows:        "auto",
+      min_columns: 3,
+      min_rows:    2,
+    };
+  }
+
+  // Older HA versions used getLayoutOptions() with grid_* keys. Kept for
+  // back-compat — newer HA prefers getGridOptions() but honours either.
+  getLayoutOptions() {
+    const c = this._config || {};
+    const isDual = c.layout === "dual";
+    return {
+      grid_columns:     isDual ? 12 : 6,
+      grid_rows:        "auto",
+      grid_min_columns: 3,
+      grid_min_rows:    2,
+    };
   }
 
   static getConfigElement() {
