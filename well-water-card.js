@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v9
+ * Well Water Level Card  — v10
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=9   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=10   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -26,7 +26,7 @@
  *   warn_low: 1.0           # amber warning, in display_unit
  *   entity_pump: binary_sensor.well_pump
  *   theme: dark             # dark | light | ha | custom
- *   well_style: dark        # dark | light  (SVG shaft look, default = follows theme)
+ *   well_style: dark        # dark | light | classic-pump | classic-roof | classic-crank
  *   well_position: left     # left | right | top | bottom
  *   font_size: normal       # small | normal | large
  *   show_title: true        # false hides the card title
@@ -541,6 +541,338 @@ class WellWaterCard extends HTMLElement {
     );
   }
 
+  // ── Classic variants ─────────────────────────────────────────────────────────
+  // Every classic variant keeps the cross-section water view (so sensor level
+  // still maps 1:1 to visible fill height). Only the walls and the decoration
+  // above the shaft differ. Each function hard-codes its own stone/wood/iron
+  // palette; the `shaft` param is still accepted (for tick colors) so existing
+  // callers don't have to change. Unique IDs per variant/idx avoid clashes in
+  // dual mode.
+
+  _classicShaftInterior(d, shaft, SX, SY, SW, SH, idPre) {
+    const { level, pct, unit, col, colL } = d;
+    const SB = SY + SH;
+    const fillH = pct / 100 * SH;
+    const fillY = SB - fillH;
+
+    const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => ({
+      y: SB - f * SH,
+      v: uFmt(d.min + (d.max - d.min) * f, unit),
+    }));
+    const ticksSvg = ticks.map(tk =>
+      "<line x1='" + (SX - 10) + "' y1='" + tk.y + "' x2='" + (SX - 1) + "' y2='" + tk.y + "' stroke='" + shaft.tick + "' stroke-width='1'/>" +
+      "<text x='" + (SX - 12) + "' y='" + (tk.y + 3) + "' text-anchor='end' font-size='7' fill='" + shaft.tickTxt + "' font-family='monospace'>" + tk.v + "</text>"
+    ).join("");
+
+    const levelLine = level !== null
+      ? "<line x1='" + SX + "' y1='" + fillY + "' x2='" + (SX + SW) + "' y2='" + fillY + "' stroke='" + col + "' stroke-width='1.5' opacity='.9'/>" +
+        "<polygon points='" + (SX + SW + 4) + "," + fillY + " " + (SX + SW + 9) + "," + (fillY - 4) + " " + (SX + SW + 9) + "," + (fillY + 4) + "' fill='" + col + "' opacity='.9'/>"
+      : "";
+    const levelLabel = (level !== null && fillH > 20)
+      ? "<text x='" + (SX + SW + 14) + "' y='" + (fillY + 4) + "' font-size='8' fill='" + col + "' font-family='monospace' opacity='.85'>" + uFmt(level, unit) + "</text>"
+      : "";
+
+    return {
+      ticksSvg,
+      levelLine,
+      levelLabel,
+      fillY,
+      fillH,
+      defs:
+        "<clipPath id='" + idPre + "sc'><rect x='" + SX + "' y='" + SY + "' width='" + SW + "' height='" + SH + "' rx='2'/></clipPath>" +
+        "<linearGradient id='" + idPre + "wg' x1='0' y1='0' x2='0' y2='1'>" +
+          "<stop offset='0%' stop-color='" + colL + "' stop-opacity='.9'/>" +
+          "<stop offset='100%' stop-color='" + col + "' stop-opacity='1'/>" +
+        "</linearGradient>",
+      waterFill:
+        "<g clip-path='url(#" + idPre + "sc)'>" +
+          "<rect x='" + SX + "' y='" + fillY + "' width='" + SW + "' height='" + (fillH + 20) + "' fill='url(#" + idPre + "wg)' opacity='.85'/>" +
+          "<g transform='translate(" + SX + "," + (fillY - 12) + ") scale(" + (SW / 240).toFixed(5) + ",1)'>" +
+            "<path class='wp1' d='" + this._wavePath(this._wave,      0) + "' fill='" + colL + "' opacity='.38'/>" +
+            "<path class='wp2' d='" + this._wavePath(this._wave + 90, 1) + "' fill='" + col  + "' opacity='.32'/>" +
+          "</g>" +
+        "</g>",
+    };
+  }
+
+  // ── Classic: stone well with cast-iron hand pump on top ─────────────────────
+
+  _svgPumpLarge(d, shaft) {
+    const SX = 26, SY = 70, SW = 48, SH = 200;
+    const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, "_p");
+    const stone = "url(#_pstone)";
+    return (
+      "<svg width='100' height='290' viewBox='0 0 100 290'>" +
+      "<defs>" +
+        i.defs +
+        "<linearGradient id='_pstone' x1='0' y1='0' x2='1' y2='0'>" +
+          "<stop offset='0%' stop-color='#5a6876'/>" +
+          "<stop offset='50%' stop-color='#3d4853'/>" +
+          "<stop offset='100%' stop-color='#2a323b'/>" +
+        "</linearGradient>" +
+        "<linearGradient id='_piron' x1='0' y1='0' x2='1' y2='0'>" +
+          "<stop offset='0%' stop-color='#2b2b30'/>" +
+          "<stop offset='50%' stop-color='#4a4a52'/>" +
+          "<stop offset='100%' stop-color='#1f1f24'/>" +
+        "</linearGradient>" +
+      "</defs>" +
+      i.ticksSvg +
+      // pump body (cast iron, narrower than shaft)
+      "<rect x='42' y='12' width='16' height='50' rx='2' fill='url(#_piron)'/>" +
+      "<rect x='40' y='10' width='20' height='4' rx='1' fill='#1a1a1f'/>" +
+      // lever (curved left)
+      "<path d='M 42 26 Q 25 20 18 32' stroke='#1a1a1f' stroke-width='2.5' fill='none' stroke-linecap='round'/>" +
+      "<circle cx='18' cy='32' r='2.5' fill='#6b6b73'/>" +
+      // spout (right)
+      "<path d='M 58 48 L 78 50 L 78 56 L 58 54 Z' fill='url(#_piron)'/>" +
+      "<rect x='76' y='54' width='5' height='2.5' fill='#1a1a1f'/>" +
+      // flange between pump and stone rim
+      "<rect x='36' y='60' width='28' height='5' rx='1' fill='#1a1a1f'/>" +
+      // stone rim (wider than shaft)
+      "<rect x='20' y='64' width='60' height='10' fill='" + stone + "' rx='2'/>" +
+      "<line x1='34' y1='64' x2='34' y2='74' stroke='#2a323b' stroke-width='1'/>" +
+      "<line x1='50' y1='64' x2='50' y2='74' stroke='#2a323b' stroke-width='1'/>" +
+      "<line x1='66' y1='64' x2='66' y2='74' stroke='#2a323b' stroke-width='1'/>" +
+      // shaft walls (stone)
+      "<rect x='" + SX + "' y='" + SY + "' width='6' height='" + SH + "' fill='" + stone + "'/>" +
+      "<rect x='" + (SX + SW - 6) + "' y='" + SY + "' width='6' height='" + SH + "' fill='#2a323b'/>" +
+      // horizontal stone courses
+      [120, 170, 220].map(y =>
+        "<line x1='" + SX + "' y1='" + y + "' x2='" + (SX + 6) + "' y2='" + y + "' stroke='#2a323b' stroke-width='.5'/>" +
+        "<line x1='" + (SX + SW - 6) + "' y1='" + y + "' x2='" + (SX + SW) + "' y2='" + y + "' stroke='#2a323b' stroke-width='.5'/>"
+      ).join("") +
+      // bottom
+      "<rect x='" + SX + "' y='" + (SY + SH - 2) + "' width='" + SW + "' height='4' fill='#1a1f24' rx='1'/>" +
+      // inner shadow + water + level
+      "<rect x='" + (SX + 6) + "' y='" + SY + "' width='2' height='" + SH + "' fill='rgba(0,0,0,0.25)'/>" +
+      i.waterFill +
+      i.levelLine +
+      i.levelLabel +
+      "</svg>"
+    );
+  }
+
+  _svgPumpSmall(d, idx, shaft) {
+    const SX = 18, SY = 52, SW = 42, SH = 160;
+    const I = "p" + idx;
+    const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, I);
+    return (
+      "<svg width='80' height='230' viewBox='0 0 80 230'>" +
+      "<defs>" +
+        i.defs +
+        "<linearGradient id='" + I + "stone' x1='0' y1='0' x2='1' y2='0'>" +
+          "<stop offset='0%' stop-color='#5a6876'/>" +
+          "<stop offset='100%' stop-color='#2a323b'/>" +
+        "</linearGradient>" +
+      "</defs>" +
+      i.ticksSvg +
+      // mini pump
+      "<rect x='33' y='8' width='14' height='32' rx='2' fill='#3a3a42'/>" +
+      "<path d='M 33 18 Q 20 14 14 22' stroke='#1a1a1f' stroke-width='2' fill='none' stroke-linecap='round'/>" +
+      "<circle cx='14' cy='22' r='2' fill='#6b6b73'/>" +
+      "<path d='M 47 32 L 62 34 L 62 38 L 47 36 Z' fill='#3a3a42'/>" +
+      "<rect x='29' y='40' width='22' height='4' fill='#1a1a1f' rx='1'/>" +
+      // stone rim
+      "<rect x='14' y='44' width='52' height='8' fill='url(#" + I + "stone)' rx='2'/>" +
+      // shaft walls
+      "<rect x='" + SX + "' y='" + SY + "' width='5' height='" + SH + "' fill='url(#" + I + "stone)'/>" +
+      "<rect x='" + (SX + SW - 5) + "' y='" + SY + "' width='5' height='" + SH + "' fill='#2a323b'/>" +
+      "<rect x='" + SX + "' y='" + (SY + SH - 2) + "' width='" + SW + "' height='3' fill='#1a1f24' rx='1'/>" +
+      i.waterFill +
+      i.levelLine +
+      i.levelLabel +
+      "</svg>"
+    );
+  }
+
+  // ── Classic: stone well with pitched roof and bucket on rope ────────────────
+
+  _svgRoofLarge(d, shaft) {
+    const SX = 26, SY = 80, SW = 48, SH = 200;
+    const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, "_r");
+    const stone = "url(#_rstone)";
+    const wood  = "url(#_rwood)";
+    return (
+      "<svg width='100' height='290' viewBox='0 0 100 290'>" +
+      "<defs>" +
+        i.defs +
+        "<linearGradient id='_rstone' x1='0' y1='0' x2='1' y2='0'>" +
+          "<stop offset='0%' stop-color='#5a6876'/><stop offset='50%' stop-color='#3d4853'/><stop offset='100%' stop-color='#2a323b'/>" +
+        "</linearGradient>" +
+        "<linearGradient id='_rwood' x1='0' y1='0' x2='1' y2='0'>" +
+          "<stop offset='0%' stop-color='#6b4a2b'/><stop offset='50%' stop-color='#8a5f3a'/><stop offset='100%' stop-color='#4e3620'/>" +
+        "</linearGradient>" +
+        "<linearGradient id='_rroof' x1='0' y1='0' x2='0' y2='1'>" +
+          "<stop offset='0%' stop-color='#7a3a28'/><stop offset='100%' stop-color='#4a2318'/>" +
+        "</linearGradient>" +
+      "</defs>" +
+      i.ticksSvg +
+      // pitched roof
+      "<polygon points='10,52 90,52 50,14' fill='url(#_rroof)'/>" +
+      "<polygon points='10,52 90,52 50,24' fill='#2a140e' opacity='.35'/>" +
+      // ridge board
+      "<rect x='8' y='50' width='84' height='4' fill='#2a140e' rx='1'/>" +
+      // support posts
+      "<rect x='14' y='52' width='5' height='28' fill='" + wood + "'/>" +
+      "<rect x='81' y='52' width='5' height='28' fill='" + wood + "'/>" +
+      // cross-beam + pulley hub
+      "<rect x='14' y='58' width='72' height='4' fill='" + wood + "'/>" +
+      "<circle cx='50' cy='60' r='3' fill='#3a2618'/>" +
+      // rope + bucket (bucket fixed high in shaft)
+      "<line x1='50' y1='62' x2='50' y2='150' stroke='#c9a87a' stroke-width='1.2'/>" +
+      "<path d='M 42 150 L 58 150 L 56 164 L 44 164 Z' fill='" + wood + "' stroke='#3a2618' stroke-width='.5'/>" +
+      "<line x1='42' y1='150' x2='58' y2='150' stroke='#3a2618' stroke-width='1.2'/>" +
+      // stone rim
+      "<rect x='20' y='74' width='60' height='8' fill='" + stone + "' rx='2'/>" +
+      "<line x1='36' y1='74' x2='36' y2='82' stroke='#2a323b' stroke-width='1'/>" +
+      "<line x1='50' y1='74' x2='50' y2='82' stroke='#2a323b' stroke-width='1'/>" +
+      "<line x1='64' y1='74' x2='64' y2='82' stroke='#2a323b' stroke-width='1'/>" +
+      // shaft walls
+      "<rect x='" + SX + "' y='" + SY + "' width='6' height='" + SH + "' fill='" + stone + "'/>" +
+      "<rect x='" + (SX + SW - 6) + "' y='" + SY + "' width='6' height='" + SH + "' fill='#2a323b'/>" +
+      [130, 180, 230].map(y =>
+        "<line x1='" + SX + "' y1='" + y + "' x2='" + (SX + 6) + "' y2='" + y + "' stroke='#2a323b' stroke-width='.5'/>" +
+        "<line x1='" + (SX + SW - 6) + "' y1='" + y + "' x2='" + (SX + SW) + "' y2='" + y + "' stroke='#2a323b' stroke-width='.5'/>"
+      ).join("") +
+      "<rect x='" + SX + "' y='" + (SY + SH - 2) + "' width='" + SW + "' height='4' fill='#1a1f24' rx='1'/>" +
+      "<rect x='" + (SX + 6) + "' y='" + SY + "' width='2' height='" + SH + "' fill='rgba(0,0,0,0.25)'/>" +
+      i.waterFill +
+      i.levelLine +
+      i.levelLabel +
+      "</svg>"
+    );
+  }
+
+  _svgRoofSmall(d, idx, shaft) {
+    const SX = 18, SY = 62, SW = 42, SH = 150;
+    const I = "r" + idx;
+    const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, I);
+    return (
+      "<svg width='80' height='230' viewBox='0 0 80 230'>" +
+      "<defs>" +
+        i.defs +
+        "<linearGradient id='" + I + "stone' x1='0' y1='0' x2='1' y2='0'><stop offset='0%' stop-color='#5a6876'/><stop offset='100%' stop-color='#2a323b'/></linearGradient>" +
+        "<linearGradient id='" + I + "roof' x1='0' y1='0' x2='0' y2='1'><stop offset='0%' stop-color='#7a3a28'/><stop offset='100%' stop-color='#4a2318'/></linearGradient>" +
+      "</defs>" +
+      i.ticksSvg +
+      "<polygon points='8,38 72,38 40,8' fill='url(#" + I + "roof)'/>" +
+      "<rect x='6' y='36' width='68' height='3' fill='#2a140e' rx='1'/>" +
+      "<rect x='12' y='38' width='4' height='22' fill='#6b4a2b'/>" +
+      "<rect x='64' y='38' width='4' height='22' fill='#6b4a2b'/>" +
+      "<rect x='12' y='44' width='56' height='3' fill='#6b4a2b'/>" +
+      "<line x1='40' y1='47' x2='40' y2='110' stroke='#c9a87a' stroke-width='1'/>" +
+      "<rect x='34' y='110' width='12' height='10' fill='#6b4a2b' stroke='#3a2618' stroke-width='.5'/>" +
+      "<rect x='14' y='56' width='52' height='6' fill='url(#" + I + "stone)' rx='1'/>" +
+      "<rect x='" + SX + "' y='" + SY + "' width='5' height='" + SH + "' fill='url(#" + I + "stone)'/>" +
+      "<rect x='" + (SX + SW - 5) + "' y='" + SY + "' width='5' height='" + SH + "' fill='#2a323b'/>" +
+      "<rect x='" + SX + "' y='" + (SY + SH - 2) + "' width='" + SW + "' height='3' fill='#1a1f24' rx='1'/>" +
+      i.waterFill +
+      i.levelLine +
+      i.levelLabel +
+      "</svg>"
+    );
+  }
+
+  // ── Classic: wooden well with drum + crank handle ───────────────────────────
+
+  _svgCrankLarge(d, shaft) {
+    const SX = 26, SY = 75, SW = 48, SH = 200;
+    const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, "_c");
+    const wood = "url(#_cwood)";
+    return (
+      "<svg width='100' height='290' viewBox='0 0 100 290'>" +
+      "<defs>" +
+        i.defs +
+        "<linearGradient id='_cwood' x1='0' y1='0' x2='1' y2='0'>" +
+          "<stop offset='0%' stop-color='#8a5f3a'/><stop offset='50%' stop-color='#6b4428'/><stop offset='100%' stop-color='#3a2618'/>" +
+        "</linearGradient>" +
+        "<linearGradient id='_cdrum' x1='0' y1='0' x2='0' y2='1'>" +
+          "<stop offset='0%' stop-color='#8a5f3a'/><stop offset='100%' stop-color='#4e3620'/>" +
+        "</linearGradient>" +
+      "</defs>" +
+      i.ticksSvg +
+      // support posts
+      "<rect x='16' y='30' width='5' height='40' fill='" + wood + "'/>" +
+      "<rect x='79' y='30' width='5' height='40' fill='" + wood + "'/>" +
+      // drum
+      "<rect x='21' y='40' width='58' height='14' rx='2' fill='url(#_cdrum)'/>" +
+      "<ellipse cx='21' cy='47' rx='3' ry='7' fill='#3a2618'/>" +
+      "<ellipse cx='79' cy='47' rx='3' ry='7' fill='#3a2618'/>" +
+      "<line x1='24' y1='44' x2='76' y2='44' stroke='#3a2618' stroke-width='.5' opacity='.6'/>" +
+      "<line x1='24' y1='50' x2='76' y2='50' stroke='#3a2618' stroke-width='.5' opacity='.6'/>" +
+      // crank (right)
+      "<line x1='85' y1='47' x2='93' y2='47' stroke='#4a4a52' stroke-width='2.5'/>" +
+      "<line x1='93' y1='47' x2='93' y2='60' stroke='#4a4a52' stroke-width='2.5'/>" +
+      "<circle cx='93' cy='60' r='2.5' fill='#8a5f3a'/>" +
+      // rope + bucket
+      "<line x1='50' y1='54' x2='50' y2='160' stroke='#c9a87a' stroke-width='1.2'/>" +
+      "<path d='M 42 160 L 58 160 L 56 174 L 44 174 Z' fill='" + wood + "' stroke='#3a2618' stroke-width='.5'/>" +
+      "<line x1='42' y1='160' x2='58' y2='160' stroke='#3a2618' stroke-width='1.2'/>" +
+      // wooden rim (plank divisions)
+      "<rect x='20' y='68' width='60' height='8' fill='" + wood + "' rx='1'/>" +
+      "<line x1='36' y1='68' x2='36' y2='76' stroke='#3a2618' stroke-width='.8'/>" +
+      "<line x1='50' y1='68' x2='50' y2='76' stroke='#3a2618' stroke-width='.8'/>" +
+      "<line x1='64' y1='68' x2='64' y2='76' stroke='#3a2618' stroke-width='.8'/>" +
+      // shaft walls (wooden)
+      "<rect x='" + SX + "' y='" + SY + "' width='6' height='" + SH + "' fill='" + wood + "'/>" +
+      "<rect x='" + (SX + SW - 6) + "' y='" + SY + "' width='6' height='" + SH + "' fill='#3a2618'/>" +
+      [125, 175, 225].map(y =>
+        "<line x1='" + SX + "' y1='" + y + "' x2='" + (SX + 6) + "' y2='" + y + "' stroke='#3a2618' stroke-width='.5'/>" +
+        "<line x1='" + (SX + SW - 6) + "' y1='" + y + "' x2='" + (SX + SW) + "' y2='" + y + "' stroke='#3a2618' stroke-width='.5'/>"
+      ).join("") +
+      "<rect x='" + SX + "' y='" + (SY + SH - 2) + "' width='" + SW + "' height='4' fill='#1a1f24' rx='1'/>" +
+      "<rect x='" + (SX + 6) + "' y='" + SY + "' width='2' height='" + SH + "' fill='rgba(0,0,0,0.28)'/>" +
+      i.waterFill +
+      i.levelLine +
+      i.levelLabel +
+      "</svg>"
+    );
+  }
+
+  _svgCrankSmall(d, idx, shaft) {
+    const SX = 18, SY = 58, SW = 42, SH = 154;
+    const I = "k" + idx;
+    const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, I);
+    return (
+      "<svg width='80' height='230' viewBox='0 0 80 230'>" +
+      "<defs>" +
+        i.defs +
+        "<linearGradient id='" + I + "wood' x1='0' y1='0' x2='1' y2='0'><stop offset='0%' stop-color='#8a5f3a'/><stop offset='100%' stop-color='#3a2618'/></linearGradient>" +
+      "</defs>" +
+      i.ticksSvg +
+      "<rect x='10' y='20' width='4' height='28' fill='url(#" + I + "wood)'/>" +
+      "<rect x='66' y='20' width='4' height='28' fill='url(#" + I + "wood)'/>" +
+      "<rect x='14' y='28' width='52' height='10' rx='2' fill='url(#" + I + "wood)'/>" +
+      "<line x1='72' y1='33' x2='78' y2='33' stroke='#4a4a52' stroke-width='2'/>" +
+      "<line x1='78' y1='33' x2='78' y2='43' stroke='#4a4a52' stroke-width='2'/>" +
+      "<line x1='40' y1='38' x2='40' y2='120' stroke='#c9a87a' stroke-width='1'/>" +
+      "<rect x='34' y='120' width='12' height='10' fill='#6b4428' stroke='#3a2618' stroke-width='.5'/>" +
+      "<rect x='14' y='52' width='52' height='6' fill='url(#" + I + "wood)' rx='1'/>" +
+      "<rect x='" + SX + "' y='" + SY + "' width='5' height='" + SH + "' fill='url(#" + I + "wood)'/>" +
+      "<rect x='" + (SX + SW - 5) + "' y='" + SY + "' width='5' height='" + SH + "' fill='#3a2618'/>" +
+      "<rect x='" + SX + "' y='" + (SY + SH - 2) + "' width='" + SW + "' height='3' fill='#1a1f24' rx='1'/>" +
+      i.waterFill +
+      i.levelLine +
+      i.levelLabel +
+      "</svg>"
+    );
+  }
+
+  // ── SVG dispatcher ──────────────────────────────────────────────────────────
+  // Routes to the right SVG builder based on well_style. Unknown styles fall
+  // back to the modern (dark/light) renderer so existing configs keep working.
+
+  _renderSvg(d, shaft, size, idx) {
+    const style = this._config.well_style;
+    const small = size === "small";
+    switch (style) {
+      case "classic-pump":  return small ? this._svgPumpSmall(d, idx || 0, shaft)  : this._svgPumpLarge(d, shaft);
+      case "classic-roof":  return small ? this._svgRoofSmall(d, idx || 0, shaft)  : this._svgRoofLarge(d, shaft);
+      case "classic-crank": return small ? this._svgCrankSmall(d, idx || 0, shaft) : this._svgCrankLarge(d, shaft);
+      default:              return small ? this._svgSmall(d, idx || 0, shaft)      : this._svgLarge(d, shaft);
+    }
+  }
+
   // ── Shared CSS ───────────────────────────────────────────────────────────────
 
   _css(t) {
@@ -666,7 +998,7 @@ class WellWaterCard extends HTMLElement {
 
     const svgBlock =
       "<div class='svg-wrap' style='flex-shrink:0;" + (isVertical ? "display:flex;justify-content:center;" : "") + "'>" +
-      this._svgLarge(d, t.shaft) +
+      this._renderSvg(d, t.shaft, "large") +
       "</div>";
 
     const readBlock =
@@ -720,10 +1052,10 @@ class WellWaterCard extends HTMLElement {
       // Side-by-side: compact column with small SVG + readings below
       const inner = stacked
         ? "<div style='display:flex;align-items:flex-start;gap:16px;'>" +
-            "<div style='flex-shrink:0;'>" + this._svgLarge(d, t.shaft) + "</div>" +
+            "<div style='flex-shrink:0;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
             "<div style='flex:1;min-width:0;padding-top:8px;'>" + this._readings(d, t, false) + "</div>" +
           "</div>"
-        : "<div style='display:flex;justify-content:center;'>" + this._svgSmall(d, idx, t.shaft) + "</div>" +
+        : "<div style='display:flex;justify-content:center;'>" + this._renderSvg(d, t.shaft, "small", idx) + "</div>" +
           "<div style='padding-top:8px;'>" + this._readings(d, t, true) + "</div>";
 
       // Stacked separator between wells
@@ -1015,9 +1347,12 @@ class WellWaterCardEditor extends HTMLElement {
           </select></label>
         <label><span>Well style</span>
           <select id="well_style">
-            ${opt("",      "Auto (follow theme)")}
-            ${opt("dark",  "Dark well")}
-            ${opt("light", "Light well")}
+            ${opt("",               "Auto (follow theme)")}
+            ${opt("dark",           "Modern · dark")}
+            ${opt("light",          "Modern · light")}
+            ${opt("classic-pump",   "Classic · stone + hand pump")}
+            ${opt("classic-roof",   "Classic · roof + bucket")}
+            ${opt("classic-crank",  "Classic · wooden + crank")}
           </select></label>
         <label><span>Font size</span>
           <select id="font_size">

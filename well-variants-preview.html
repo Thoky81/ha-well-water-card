@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Well Water Card — classic-well variants preview</title>
+<style>
+  :root {
+    --bg: #0d1b2a;
+    --panel: #0f1e2f;
+    --border: #1a2d42;
+    --text: #c8d8e8;
+    --title: #4a7fa5;
+    --muted: #3d6280;
+  }
+  body {
+    margin: 0;
+    padding: 32px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 { margin: 0 0 8px 0; font-size: 22px; color: var(--title); letter-spacing: 0.05em; }
+  .lede { color: var(--muted); margin: 0 0 32px 0; font-size: 13px; }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; }
+  .variant {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 22px;
+    width: 260px;
+  }
+  .tag {
+    display: inline-block;
+    color: var(--title);
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .name { font-size: 16px; font-weight: 600; margin-bottom: 10px; }
+  .desc { font-size: 12px; color: var(--muted); line-height: 1.5; margin-top: 14px; }
+  .svg-host { display: flex; justify-content: center; margin: 8px 0; }
+  .legend { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; margin-top: 10px; text-align: center; }
+  code { color: var(--title); font-family: "SF Mono", monospace; }
+</style>
+</head>
+<body>
+
+<h1>Classic-well variants — pick one for v10</h1>
+<p class="lede">All three keep the current cross-section water view (so the sensor level still reads correctly) and just change what sits on top / how the walls are styled. Water is shown at ~60% in each preview.</p>
+
+<div class="row">
+
+  <!-- ────────────────────────────────────────────────────────────────────── -->
+  <!-- Variant A: Stone well with cast-iron hand pump on top                  -->
+  <!-- ────────────────────────────────────────────────────────────────────── -->
+  <div class="variant">
+    <div class="tag">Variant A</div>
+    <div class="name">Stone well · hand pump</div>
+    <div class="svg-host">
+      <svg width="120" height="300" viewBox="0 0 120 300">
+        <defs>
+          <linearGradient id="a_stone" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%"  stop-color="#5a6876"/>
+            <stop offset="50%" stop-color="#3d4853"/>
+            <stop offset="100%" stop-color="#2a323b"/>
+          </linearGradient>
+          <linearGradient id="a_water" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#42a5f5" stop-opacity=".9"/>
+            <stop offset="100%" stop-color="#1e88e5"/>
+          </linearGradient>
+          <linearGradient id="a_iron" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#2b2b30"/>
+            <stop offset="50%" stop-color="#4a4a52"/>
+            <stop offset="100%" stop-color="#1f1f24"/>
+          </linearGradient>
+          <clipPath id="a_clip"><rect x="36" y="100" width="48" height="180" rx="2"/></clipPath>
+        </defs>
+
+        <!-- pump body (cast iron) -->
+        <rect x="50" y="30" width="20" height="60" rx="2" fill="url(#a_iron)"/>
+        <rect x="48" y="28" width="24" height="4" rx="1" fill="#1a1a1f"/>
+        <!-- pump handle (curved lever) -->
+        <path d="M 50 45 Q 30 38 22 50" stroke="#1a1a1f" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <circle cx="22" cy="50" r="3" fill="#6b6b73"/>
+        <!-- pump spout -->
+        <path d="M 70 70 L 88 72 L 88 78 L 70 76 Z" fill="url(#a_iron)"/>
+        <rect x="85" y="76" width="6" height="3" fill="#1a1a1f"/>
+
+        <!-- flange where pump meets well cap -->
+        <rect x="44" y="88" width="32" height="6" rx="1" fill="#1a1a1f"/>
+
+        <!-- stone rim / cap (wider stones) -->
+        <rect x="26" y="94" width="68" height="12" fill="url(#a_stone)" rx="2"/>
+        <!-- individual stones for texture -->
+        <line x1="40" y1="94" x2="40" y2="106" stroke="#2a323b" stroke-width="1"/>
+        <line x1="55" y1="94" x2="55" y2="106" stroke="#2a323b" stroke-width="1"/>
+        <line x1="70" y1="94" x2="70" y2="106" stroke="#2a323b" stroke-width="1"/>
+        <line x1="85" y1="94" x2="85" y2="106" stroke="#2a323b" stroke-width="1"/>
+
+        <!-- shaft walls (stone texture) -->
+        <rect x="32" y="100" width="6" height="180" fill="url(#a_stone)"/>
+        <rect x="82" y="100" width="6" height="180" fill="url(#a_stone)"/>
+        <!-- horizontal stone courses -->
+        <line x1="32" y1="140" x2="38" y2="140" stroke="#2a323b" stroke-width=".5"/>
+        <line x1="32" y1="180" x2="38" y2="180" stroke="#2a323b" stroke-width=".5"/>
+        <line x1="32" y1="220" x2="38" y2="220" stroke="#2a323b" stroke-width=".5"/>
+        <line x1="82" y1="140" x2="88" y2="140" stroke="#2a323b" stroke-width=".5"/>
+        <line x1="82" y1="180" x2="88" y2="180" stroke="#2a323b" stroke-width=".5"/>
+        <line x1="82" y1="220" x2="88" y2="220" stroke="#2a323b" stroke-width=".5"/>
+
+        <!-- bottom -->
+        <rect x="36" y="278" width="48" height="4" fill="#1a1f24" rx="1"/>
+
+        <!-- water fill (clipped to shaft) -->
+        <g clip-path="url(#a_clip)">
+          <rect x="36" y="172" width="48" height="112" fill="url(#a_water)" opacity=".88"/>
+        </g>
+
+        <!-- level tick/marker -->
+        <line x1="36" y1="172" x2="84" y2="172" stroke="#42a5f5" stroke-width="1.2" opacity=".8"/>
+        <text x="92" y="176" font-size="8" fill="#42a5f5" font-family="monospace">2.4m</text>
+      </svg>
+    </div>
+    <div class="desc">Classic stone well with a cast-iron hand pump on top. Lever on the left, spout on the right. Strong "cottage garden" vibe.</div>
+    <div class="legend">id: <code>classic-pump</code></div>
+  </div>
+
+  <!-- ────────────────────────────────────────────────────────────────────── -->
+  <!-- Variant B: Stone well with pitched roof and bucket                     -->
+  <!-- ────────────────────────────────────────────────────────────────────── -->
+  <div class="variant">
+    <div class="tag">Variant B</div>
+    <div class="name">Stone well · roof &amp; bucket</div>
+    <div class="svg-host">
+      <svg width="140" height="300" viewBox="0 0 140 300">
+        <defs>
+          <linearGradient id="b_stone" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%"  stop-color="#5a6876"/>
+            <stop offset="50%" stop-color="#3d4853"/>
+            <stop offset="100%" stop-color="#2a323b"/>
+          </linearGradient>
+          <linearGradient id="b_water" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#42a5f5" stop-opacity=".9"/>
+            <stop offset="100%" stop-color="#1e88e5"/>
+          </linearGradient>
+          <linearGradient id="b_wood" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#6b4a2b"/>
+            <stop offset="50%" stop-color="#8a5f3a"/>
+            <stop offset="100%" stop-color="#4e3620"/>
+          </linearGradient>
+          <linearGradient id="b_roof" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#7a3a28"/>
+            <stop offset="100%" stop-color="#4a2318"/>
+          </linearGradient>
+          <clipPath id="b_clip"><rect x="46" y="110" width="48" height="170" rx="2"/></clipPath>
+        </defs>
+
+        <!-- roof (pitched) -->
+        <polygon points="30,60 110,60 70,18" fill="url(#b_roof)"/>
+        <!-- roof underside shading -->
+        <polygon points="30,60 110,60 70,30" fill="#2a140e" opacity=".4"/>
+        <!-- ridge board -->
+        <rect x="28" y="58" width="84" height="4" fill="#2a140e" rx="1"/>
+
+        <!-- support posts -->
+        <rect x="34" y="58" width="6" height="46" fill="url(#b_wood)"/>
+        <rect x="100" y="58" width="6" height="46" fill="url(#b_wood)"/>
+
+        <!-- cross-beam with crank/pulley above shaft opening -->
+        <rect x="34" y="66" width="72" height="4" fill="url(#b_wood)"/>
+        <circle cx="70" cy="68" r="3" fill="#3a2618"/>
+
+        <!-- rope down into shaft -->
+        <line x1="70" y1="70" x2="70" y2="200" stroke="#c9a87a" stroke-width="1.2"/>
+        <!-- bucket -->
+        <path d="M 62 200 L 78 200 L 76 214 L 64 214 Z" fill="url(#b_wood)" stroke="#3a2618" stroke-width=".5"/>
+        <line x1="62" y1="200" x2="78" y2="200" stroke="#3a2618" stroke-width="1.2"/>
+
+        <!-- stone rim -->
+        <rect x="36" y="104" width="68" height="10" fill="url(#b_stone)" rx="2"/>
+        <line x1="50" y1="104" x2="50" y2="114" stroke="#2a323b" stroke-width="1"/>
+        <line x1="64" y1="104" x2="64" y2="114" stroke="#2a323b" stroke-width="1"/>
+        <line x1="78" y1="104" x2="78" y2="114" stroke="#2a323b" stroke-width="1"/>
+        <line x1="92" y1="104" x2="92" y2="114" stroke="#2a323b" stroke-width="1"/>
+
+        <!-- shaft walls -->
+        <rect x="42" y="110" width="6" height="170" fill="url(#b_stone)"/>
+        <rect x="92" y="110" width="6" height="170" fill="url(#b_stone)"/>
+        <line x1="42" y1="150" x2="48" y2="150" stroke="#2a323b" stroke-width=".5"/>
+        <line x1="42" y1="190" x2="48" y2="190" stroke="#2a323b" stroke-width=".5"/>
+        <line x1="42" y1="230" x2="48" y2="230" stroke="#2a323b" stroke-width=".5"/>
+        <line x1="92" y1="150" x2="98" y2="150" stroke="#2a323b" stroke-width=".5"/>
+        <line x1="92" y1="190" x2="98" y2="190" stroke="#2a323b" stroke-width=".5"/>
+        <line x1="92" y1="230" x2="98" y2="230" stroke="#2a323b" stroke-width=".5"/>
+
+        <!-- bottom -->
+        <rect x="46" y="278" width="48" height="4" fill="#1a1f24" rx="1"/>
+
+        <!-- water (behind bucket) -->
+        <g clip-path="url(#b_clip)">
+          <rect x="46" y="178" width="48" height="102" fill="url(#b_water)" opacity=".88"/>
+        </g>
+
+        <!-- level indicator -->
+        <line x1="46" y1="178" x2="94" y2="178" stroke="#42a5f5" stroke-width="1.2" opacity=".8"/>
+        <text x="102" y="182" font-size="8" fill="#42a5f5" font-family="monospace">2.4m</text>
+      </svg>
+    </div>
+    <div class="desc">Stone well with a pitched wooden roof, cross-beam, and bucket on a rope dipped into the shaft. The storybook / fairytale well.</div>
+    <div class="legend">id: <code>classic-roof</code></div>
+  </div>
+
+  <!-- ────────────────────────────────────────────────────────────────────── -->
+  <!-- Variant C: Wooden well with crank and rope                             -->
+  <!-- ────────────────────────────────────────────────────────────────────── -->
+  <div class="variant">
+    <div class="tag">Variant C</div>
+    <div class="name">Wooden well · crank</div>
+    <div class="svg-host">
+      <svg width="120" height="300" viewBox="0 0 120 300">
+        <defs>
+          <linearGradient id="c_plank" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#8a5f3a"/>
+            <stop offset="50%" stop-color="#6b4428"/>
+            <stop offset="100%" stop-color="#3a2618"/>
+          </linearGradient>
+          <linearGradient id="c_water" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#42a5f5" stop-opacity=".9"/>
+            <stop offset="100%" stop-color="#1e88e5"/>
+          </linearGradient>
+          <linearGradient id="c_drum" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#8a5f3a"/>
+            <stop offset="100%" stop-color="#4e3620"/>
+          </linearGradient>
+          <clipPath id="c_clip"><rect x="36" y="90" width="48" height="190" rx="2"/></clipPath>
+        </defs>
+
+        <!-- support posts -->
+        <rect x="24" y="40" width="6" height="54" fill="url(#c_plank)"/>
+        <rect x="90" y="40" width="6" height="54" fill="url(#c_plank)"/>
+
+        <!-- crank drum (horizontal cylinder) -->
+        <rect x="30" y="50" width="60" height="14" rx="2" fill="url(#c_drum)"/>
+        <ellipse cx="30" cy="57" rx="3" ry="7" fill="#3a2618"/>
+        <ellipse cx="90" cy="57" rx="3" ry="7" fill="#3a2618"/>
+        <!-- wood grain lines on drum -->
+        <line x1="33" y1="53" x2="88" y2="53" stroke="#3a2618" stroke-width=".5" opacity=".6"/>
+        <line x1="33" y1="60" x2="88" y2="60" stroke="#3a2618" stroke-width=".5" opacity=".6"/>
+
+        <!-- crank handle (L-shape on right) -->
+        <line x1="96" y1="57" x2="108" y2="57" stroke="#4a4a52" stroke-width="2.5"/>
+        <line x1="108" y1="57" x2="108" y2="72" stroke="#4a4a52" stroke-width="2.5"/>
+        <circle cx="108" cy="72" r="3" fill="#8a5f3a"/>
+
+        <!-- rope wound on drum + descending -->
+        <line x1="60" y1="64" x2="60" y2="210" stroke="#c9a87a" stroke-width="1.2"/>
+        <!-- bucket -->
+        <path d="M 52 210 L 68 210 L 66 224 L 54 224 Z" fill="url(#c_plank)" stroke="#3a2618" stroke-width=".5"/>
+        <line x1="52" y1="210" x2="68" y2="210" stroke="#3a2618" stroke-width="1.2"/>
+
+        <!-- wooden plank rim (with visible plank divisions) -->
+        <rect x="26" y="82" width="68" height="10" fill="url(#c_plank)" rx="1"/>
+        <line x1="42" y1="82" x2="42" y2="92" stroke="#3a2618" stroke-width=".8"/>
+        <line x1="60" y1="82" x2="60" y2="92" stroke="#3a2618" stroke-width=".8"/>
+        <line x1="78" y1="82" x2="78" y2="92" stroke="#3a2618" stroke-width=".8"/>
+
+        <!-- wooden shaft walls (plank texture) -->
+        <rect x="32" y="90" width="6" height="190" fill="url(#c_plank)"/>
+        <rect x="82" y="90" width="6" height="190" fill="url(#c_plank)"/>
+        <!-- vertical plank lines -->
+        <line x1="32" y1="130" x2="38" y2="130" stroke="#3a2618" stroke-width=".5"/>
+        <line x1="32" y1="170" x2="38" y2="170" stroke="#3a2618" stroke-width=".5"/>
+        <line x1="32" y1="210" x2="38" y2="210" stroke="#3a2618" stroke-width=".5"/>
+        <line x1="82" y1="130" x2="88" y2="130" stroke="#3a2618" stroke-width=".5"/>
+        <line x1="82" y1="170" x2="88" y2="170" stroke="#3a2618" stroke-width=".5"/>
+        <line x1="82" y1="210" x2="88" y2="210" stroke="#3a2618" stroke-width=".5"/>
+
+        <!-- bottom -->
+        <rect x="36" y="278" width="48" height="4" fill="#1a1f24" rx="1"/>
+
+        <!-- water -->
+        <g clip-path="url(#c_clip)">
+          <rect x="36" y="174" width="48" height="106" fill="url(#c_water)" opacity=".88"/>
+        </g>
+
+        <!-- level indicator -->
+        <line x1="36" y1="174" x2="84" y2="174" stroke="#42a5f5" stroke-width="1.2" opacity=".8"/>
+        <text x="92" y="178" font-size="8" fill="#42a5f5" font-family="monospace">2.4m</text>
+      </svg>
+    </div>
+    <div class="desc">Rustic wooden well with twin support posts, a horizontal drum + L-shaped crank handle, and a bucket on rope. The "old farm" look.</div>
+    <div class="legend">id: <code>classic-crank</code></div>
+  </div>
+
+</div>
+
+<p class="lede" style="margin-top: 40px;">
+  Tell me which one to implement (A, B, C, or multiple). I'll add the chosen style(s) as a new <code>well_style</code> option (so your existing <code>dark</code> / <code>light</code> styles still work), wire up the visual editor dropdown, and add a matching small-SVG variant for dual-mode side-by-side.
+</p>
+
+</body>
+</html>
