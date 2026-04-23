@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v21
+ * Well Water Level Card  — v22
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=21   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=22   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -320,14 +320,47 @@ class WellWaterCard extends HTMLElement {
   }
 
   set hass(hass) {
+    const oldHass = this._hass;
     this._hass = hass;
-    this._queue();
+    // Only re-render when an entity we actually track has changed. HA fires
+    // `set hass` on every state change in the whole system, so without this
+    // guard we rebuild innerHTML many times per second on a busy install —
+    // which triggers layout thrashing and makes the dashboard scroll-jump
+    // when the card sits near the viewport bottom.
+    if (this._shouldRender(oldHass, hass)) this._queue();
     // Fetch history lazily. Gated by show_history and rate-limited to roughly
     // once per 5 minutes so we don't hammer HA's recorder on every state tick.
     if (this._config && this._config.show_history) {
       const age = Date.now() - (this._historyTs || 0);
       if (age > 5 * 60 * 1000) this._fetchHistory();
     }
+  }
+
+  _shouldRender(oldHass, newHass) {
+    if (!oldHass) return true;                  // first hass — always render
+    if (!newHass || !this._config) return false;
+    const ids = this._trackedEntities();
+    if (ids.length === 0) return true;          // placeholder path
+    for (const e of ids) {
+      if ((oldHass.states || {})[e] !== (newHass.states || {})[e]) return true;
+    }
+    return false;
+  }
+
+  _trackedEntities() {
+    const c = this._config;
+    if (!c) return [];
+    const out = [];
+    if (c.layout === "dual") {
+      (c.wells || []).forEach(w => {
+        if (w.entity)      out.push(w.entity);
+        if (w.entity_pump) out.push(w.entity_pump);
+      });
+    } else {
+      if (c.entity)      out.push(c.entity);
+      if (c.entity_pump) out.push(c.entity_pump);
+    }
+    return out;
   }
 
   connectedCallback()    { this._startAnim(); }
