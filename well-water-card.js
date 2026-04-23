@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v19
+ * Well Water Level Card  — v20
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=19   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=20   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -547,9 +547,24 @@ class WellWaterCard extends HTMLElement {
     if (c.card_border)     t.cardBorder = "1px solid " + c.card_border;
     if (c.text_color)      t.textBody   = c.text_color;
     if (c.title_color)     t.titleColor = c.title_color;
+    // t.shaft kept for back-compat with callers that still pass it in; the
+    // actual per-well shaft is resolved at render time via _shaftFor(d.wellStyle).
     const wsKey = c.well_style || t.wellStyle || "dark";
     t.shaft = SHAFT_PAL[wsKey] || SHAFT_PAL.dark;
     return t;
+  }
+
+  // Resolve the shaft palette for a given well_style. "dark" / "light" modern
+  // styles map directly; classic/tank variants fall back to the theme's
+  // default shaft (they only use tick colors from it — body colors are baked
+  // into each variant's SVG).
+  _shaftFor(wellStyle) {
+    const c = this._config;
+    const themeBase = CARD_THEMES[c.theme] || CARD_THEMES.dark;
+    const wsKey = (wellStyle === "dark" || wellStyle === "light")
+                    ? wellStyle
+                    : (themeBase.wellStyle || "dark");
+    return SHAFT_PAL[wsKey] || SHAFT_PAL.dark;
   }
 
   _resolve(wcfg) {
@@ -590,6 +605,12 @@ class WellWaterCard extends HTMLElement {
     const okPal   = palFromMain(wcfg.color) || WATER_PAL.ok;
     const pal     = isEmpty ? WATER_PAL.low : isWarn ? WATER_PAL.warn : isFull ? WATER_PAL.full : okPal;
 
+    // Per-well style override: well_style on a per-well config wins over the
+    // top-level card-wide well_style. Empty string means "use card default".
+    const ws = (wcfg.well_style != null && wcfg.well_style !== "")
+                 ? wcfg.well_style
+                 : (this._config && this._config.well_style);
+
     return {
       level, pct, min, max, pumpOn,
       unit:   du,
@@ -600,6 +621,7 @@ class WellWaterCard extends HTMLElement {
       name:   wcfg.name || "Well",
       status: isEmpty ? "EMPTY" : isWarn ? "LOW" : isFull ? "FULL" : "OK",
       lbl:    uIsVol(du) ? "Volume" : "Level",
+      wellStyle: ws,
       isEmpty, isWarn, isFull,
     };
   }
@@ -1397,8 +1419,13 @@ class WellWaterCard extends HTMLElement {
   // Routes to the right SVG builder based on well_style. Unknown styles fall
   // back to the modern (dark/light) renderer so existing configs keep working.
 
-  _renderSvg(d, shaft, size, idx) {
-    const style = this._config.well_style;
+  // The caller's `shaft` is ignored when the resolved per-well style differs
+  // from it — we recompute the shaft from d.wellStyle so each well in dual
+  // mode can have its own look (modern-dark, modern-light, a classic, or a
+  // tank variant) independently.
+  _renderSvg(d, _shaft, size, idx) {
+    const style = d.wellStyle;
+    const shaft = this._shaftFor(style);
     const small = size === "small";
     switch (style) {
       case "classic-pump":    return small ? this._svgPumpSmall(d, idx || 0, shaft)      : this._svgPumpLarge(d, shaft);
@@ -1811,6 +1838,19 @@ class WellWaterCardEditor extends HTMLElement {
           <label class="full"><span>Water color (OK state)</span><div class="crow">
             <input id="${p}color" type="text" placeholder="default blue">
             <input type="color" data-for="${p}color"></div></label>
+          <label class="full"><span>Well style (override)</span>
+            <select id="${p}well_style">
+              ${opt("",               "Use card default")}
+              ${opt("dark",           "Modern · dark")}
+              ${opt("light",          "Modern · light")}
+              ${opt("classic-pump",   "Classic · stone + hand pump")}
+              ${opt("classic-roof",   "Classic · roof + bucket")}
+              ${opt("classic-crank",  "Classic · wooden + crank")}
+              ${opt("tank-cylinder",  "Tank · poly cylinder")}
+              ${opt("tank-ibc",       "Tank · IBC tote")}
+              ${opt("tank-barrel",    "Tank · wooden barrel")}
+              ${opt("tank-horizontal","Tank · horizontal cylinder")}
+            </select></label>
         </div>`;
     };
 
@@ -2063,6 +2103,7 @@ class WellWaterCardEditor extends HTMLElement {
         sv(p + "max",      w.max      != null ? w.max      : "");
         sv(p + "warn_low", w.warn_low != null ? w.warn_low : "");
         sv(p + "color",    w.color    || "");
+        sv(p + "well_style", w.well_style || "");
         syncWheel(p + "color", w.color);
       });
     }
@@ -2169,7 +2210,7 @@ class WellWaterCardEditor extends HTMLElement {
     // Per-well selects / inputs (dual mode)
     [0, 1].forEach(idx => {
       const p = "w" + idx + "_";
-      ["name","sensor_unit","display_unit","min","max","warn_low","color"].forEach(f => {
+      ["name","sensor_unit","display_unit","min","max","warn_low","color","well_style"].forEach(f => {
         onchange(p + f, f, idx);
       });
     });

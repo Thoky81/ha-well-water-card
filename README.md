@@ -33,7 +33,7 @@ A Home Assistant Lovelace card that visualises a water-level (or volume) sensor 
 
 1. Copy `well-water-card.js` to `/config/www/`.
 2. Add the resource in Settings → Dashboards → Resources:
-   - URL: `/local/well-water-card.js?v=19`
+   - URL: `/local/well-water-card.js?v=20`
    - Type: **JavaScript module**
 3. Hard-refresh the browser. Bump the `?v=` number whenever you update the file.
 
@@ -106,7 +106,7 @@ wells:
 | `well_position` | `left`\|`right`\|`top`\|`bottom` | `left` | Layout of SVG vs readings (single only). |
 | `layout` | `single`\|`dual` | `single` | Number of wells. |
 | `dual_arrangement` | `side_by_side`\|`stacked` | `side_by_side` | Dual layout. |
-| `wells` | list | — | Per-well config in dual mode (same options as single, minus layout/theme). |
+| `wells` | list | — | Per-well config in dual mode (same options as single, minus layout/theme). Each well may also set its own `well_style` to override the card-wide one. |
 | `card_background` / `card_border` / `text_color` / `title_color` | hex string | — | Only applied when `theme: custom`. |
 
 ## Units
