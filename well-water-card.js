@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v14
+ * Well Water Level Card  — v15
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=14   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=15   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -458,8 +458,7 @@ class WellWaterCard extends HTMLElement {
     ).join("");
 
     const levelLine = level !== null
-      ? "<line x1='26' y1='" + fillY + "' x2='74' y2='" + fillY + "' stroke='" + col + "' stroke-width='1.5' opacity='.9' filter='url(#_gl)'/>" +
-        "<polygon points='78," + fillY + " 83," + (fillY-4) + " 83," + (fillY+4) + "' fill='" + col + "' opacity='.9'/>"
+      ? "<polygon points='78," + fillY + " 83," + (fillY-4) + " 83," + (fillY+4) + "' fill='" + col + "' opacity='.9'/>"
       : "";
 
     // Level number rendered OUTSIDE the shaft to the right. The SVG viewBox
@@ -520,8 +519,7 @@ class WellWaterCard extends HTMLElement {
     ).join("");
 
     const levelLine = level !== null
-      ? "<line x1='" + SX + "' y1='" + fillY + "' x2='" + (SX+SW) + "' y2='" + fillY + "' stroke='" + col + "' stroke-width='1.5' opacity='.9' filter='url(#" + I + "gl)'/>" +
-        "<polygon points='" + (SX+SW+3) + "," + fillY + " " + (SX+SW+8) + "," + (fillY-3.5) + " " + (SX+SW+8) + "," + (fillY+3.5) + "' fill='" + col + "' opacity='.9'/>"
+      ? "<polygon points='" + (SX+SW+3) + "," + fillY + " " + (SX+SW+8) + "," + (fillY-3.5) + " " + (SX+SW+8) + "," + (fillY+3.5) + "' fill='" + col + "' opacity='.9'/>"
       : "";
 
     const levelLabel = (level !== null && fillH > 15)
@@ -588,9 +586,11 @@ class WellWaterCard extends HTMLElement {
       "<text x='" + (SX - 12) + "' y='" + (tk.y + 3.5) + "' text-anchor='end' font-size='" + tickFs + "' fill='" + shaft.tickTxt + "' font-family='monospace'>" + tk.v + "</text>"
     ).join("");
 
+    // Just the side arrow + number — no horizontal stripe across the shaft.
+    // The stripe shimmered against the animated wave and added no info the
+    // arrow + label don't already convey.
     const levelLine = level !== null
-      ? "<line x1='" + SX + "' y1='" + fillY + "' x2='" + (SX + SW) + "' y2='" + fillY + "' stroke='" + col + "' stroke-width='1.5' opacity='.9'/>" +
-        "<polygon points='" + (SX + SW + 4) + "," + fillY + " " + (SX + SW + 9) + "," + (fillY - 4) + " " + (SX + SW + 9) + "," + (fillY + 4) + "' fill='" + col + "' opacity='.9'/>"
+      ? "<polygon points='" + (SX + SW + 4) + "," + fillY + " " + (SX + SW + 9) + "," + (fillY - 4) + " " + (SX + SW + 9) + "," + (fillY + 4) + "' fill='" + col + "' opacity='.9'/>"
       : "";
     const levelLabel = (level !== null && fillH > 20)
       ? "<text x='" + (SX + SW + 14) + "' y='" + (fillY + 5) + "' font-size='" + labelFs + "' font-weight='700' fill='" + col + "' font-family='monospace' opacity='.92'>" + uFmt(level, unit) + "</text>"
