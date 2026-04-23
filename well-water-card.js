@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v22
+ * Well Water Level Card  — v23
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=22   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=23   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -1611,8 +1611,12 @@ class WellWaterCard extends HTMLElement {
     const isVertical = pos === "top" || pos === "bottom";
     const isReverse  = pos === "right" || pos === "bottom";
 
+    // Fixed SVG slot: reserve the same vertical space regardless of the
+    // style picked, so content below (readings, Min/Max, history) sits at a
+    // predictable level. Shorter SVGs like tank-horizontal sit at the top
+    // and get the extra space below.
     const svgBlock =
-      "<div class='svg-wrap' style='flex-shrink:0;" + (isVertical ? "display:flex;justify-content:center;" : "") + "'>" +
+      "<div class='svg-wrap' style='flex-shrink:0;min-height:290px;display:flex;flex-direction:column;align-items:" + (isVertical ? "center" : "flex-start") + ";'>" +
       this._renderSvg(d, t.shaft, "large") +
       "</div>";
 
@@ -1666,14 +1670,20 @@ class WellWaterCard extends HTMLElement {
       const wellEntity = (c.wells[idx] || {}).entity;
       const historyHtml = this._historyBlock(wellEntity, t);
 
-      // Stacked: full-width row with large SVG on left, readings on right
-      // Side-by-side: compact column with small SVG + readings below
+      // Stacked: full-width row with large SVG on left, readings on right.
+      // Side-by-side: compact column with small SVG on top + readings below.
+      // In both layouts, the SVG wrapper has a fixed min-height matching the
+      // tallest variant (290 large / 230 small). Shorter SVGs sit at the top
+      // and leave empty space below, so the content after the SVG (readings,
+      // history) lines up at the same vertical level across both wells —
+      // otherwise mixing e.g. tank-horizontal with modern-dark gives one
+      // column a readings row 100+ px higher than the other.
       const inner = stacked
         ? "<div style='display:flex;align-items:flex-start;gap:16px;'>" +
-            "<div style='flex-shrink:0;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
+            "<div style='flex-shrink:0;min-height:290px;display:flex;flex-direction:column;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
             "<div style='flex:1;min-width:0;padding-top:8px;'>" + this._readings(d, t, false) + historyHtml + "</div>" +
           "</div>"
-        : "<div style='display:flex;justify-content:center;'>" + this._renderSvg(d, t.shaft, "small", idx) + "</div>" +
+        : "<div style='display:flex;justify-content:center;align-items:flex-start;min-height:230px;'>" + this._renderSvg(d, t.shaft, "small", idx) + "</div>" +
           "<div style='padding-top:8px;'>" + this._readings(d, t, true) + historyHtml + "</div>";
 
       // Stacked separator between wells
