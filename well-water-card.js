@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v18
+ * Well Water Level Card  — v19
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=18   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=19   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -35,6 +35,8 @@
  *   animate: true           # false: flat water surface (no wave animation)
  *   wave_intensity: normal  # calm | normal | lively | choppy  (or a number 0..2)
  *   show_fish: false        # true: a couple of fish swim back and forth in the water
+ *   show_history: false     # true: sparkline of recent sensor history below the readings
+ *   history_hours: 24       # time range for the history chart in hours
  *   color: "#1e88e5"        # water tint for the "ok" state (warn/empty/full still win)
  *   # custom theme colors (only when theme: custom):
  *   card_background: "#0d1b2a"
@@ -274,6 +276,8 @@ class WellWaterCard extends HTMLElement {
         animate:          config.animate !== false,
         wave_intensity:   config.wave_intensity != null ? config.wave_intensity : "normal",
         show_fish:        config.show_fish === true,
+        show_history:     config.show_history === true,
+        history_hours:    +config.history_hours || 24,
         card_background:  config.card_background  || null,
         card_border:      config.card_border      || null,
         text_color:       config.text_color       || null,
@@ -304,6 +308,8 @@ class WellWaterCard extends HTMLElement {
         animate:         true,
         wave_intensity:  "normal",
         show_fish:       false,
+        show_history:    false,
+        history_hours:   24,
         card_background: null,
         card_border:     null,
         text_color:      null,
@@ -316,10 +322,116 @@ class WellWaterCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     this._queue();
+    // Fetch history lazily. Gated by show_history and rate-limited to roughly
+    // once per 5 minutes so we don't hammer HA's recorder on every state tick.
+    if (this._config && this._config.show_history) {
+      const age = Date.now() - (this._historyTs || 0);
+      if (age > 5 * 60 * 1000) this._fetchHistory();
+    }
   }
 
   connectedCallback()    { this._startAnim(); }
   disconnectedCallback() { cancelAnimationFrame(this._animId); }
+
+  // Pull state history for the configured entities from HA's recorder and
+  // stash it on `this._historyData` keyed by entity_id. Result format (newer
+  // HA): { [entity_id]: [{ s: "1.23", lu: <unix_seconds> }, ...] }.
+  async _fetchHistory() {
+    if (!this._hass || !this._config || !this._config.show_history) return;
+    const entities = this._historyEntityIds();
+    if (entities.length === 0) return;
+    const hours = Math.max(1, +this._config.history_hours || 24);
+    const now   = new Date();
+    const start = new Date(now.getTime() - hours * 3600 * 1000);
+    // Mark the timestamp BEFORE the await so concurrent hass ticks don't
+    // launch a second fetch while this one is in flight.
+    this._historyTs = Date.now();
+    try {
+      const result = await this._hass.callWS({
+        type: "history/history_during_period",
+        start_time: start.toISOString(),
+        end_time: now.toISOString(),
+        entity_ids: entities,
+        minimal_response: true,
+        no_attributes: true,
+      });
+      this._historyData = result || {};
+      this._queue();
+    } catch (e) {
+      console.warn("[well-water-card] history fetch failed:", e);
+    }
+  }
+
+  _historyEntityIds() {
+    const c = this._config;
+    if (!c) return [];
+    if (c.layout === "dual") return (c.wells || []).map(w => w.entity).filter(Boolean);
+    return c.entity ? [c.entity] : [];
+  }
+
+  // Render a small line+area sparkline for one entity. Width is 100% via
+  // preserveAspectRatio='none' — the parent flex column sets the actual px.
+  _sparkline(entityId, t, color, opts) {
+    const h       = (opts && opts.height) || 46;
+    const vbW     = 240;
+    const data    = this._historyData && this._historyData[entityId];
+    if (!data || data.length < 2) return this._sparklineEmpty(t, h, "loading…");
+    const pts = [];
+    for (const p of data) {
+      const v = parseFloat(p.s);
+      const ts = (p.lu || 0) * 1000;
+      if (!isNaN(v) && ts > 0) pts.push({ t: ts, v });
+    }
+    if (pts.length < 2) return this._sparklineEmpty(t, h, "no data");
+    const tMin = pts[0].t, tMax = pts[pts.length - 1].t;
+    const tRng = Math.max(tMax - tMin, 1);
+    let vMin = Infinity, vMax = -Infinity;
+    for (const p of pts) { if (p.v < vMin) vMin = p.v; if (p.v > vMax) vMax = p.v; }
+    const vRng = Math.max(vMax - vMin, 0.01);
+    const PAD  = 3;
+    const plotH = h - PAD * 2;
+
+    let line = "";
+    for (let i = 0; i < pts.length; i++) {
+      const x = ((pts[i].t - tMin) / tRng) * vbW;
+      const y = PAD + (1 - (pts[i].v - vMin) / vRng) * plotH;
+      line += (i === 0 ? "M" : " L") + x.toFixed(1) + "," + y.toFixed(1);
+    }
+    const area = line + " L" + vbW + "," + h + " L0," + h + " Z";
+
+    return (
+      "<svg width='100%' height='" + h + "' viewBox='0 0 " + vbW + " " + h + "' preserveAspectRatio='none' style='display:block;'>" +
+        "<path d='" + area + "' fill='" + color + "' opacity='.16'/>" +
+        "<path d='" + line + "' fill='none' stroke='" + color + "' stroke-width='1.5' stroke-linejoin='round' stroke-linecap='round' vector-effect='non-scaling-stroke'/>" +
+      "</svg>"
+    );
+  }
+
+  _sparklineEmpty(t, h, msg) {
+    return (
+      "<div style='height:" + h + "px;display:flex;align-items:center;justify-content:center;" +
+        "font-size:11px;color:" + t.textMuted + ";letter-spacing:.1em;text-transform:uppercase;'>" +
+        msg +
+      "</div>"
+    );
+  }
+
+  // Header label + sparkline wrapper used by both single and dual renders.
+  _historyBlock(entityId, t) {
+    if (!this._config || !this._config.show_history || !entityId) return "";
+    const hours = +this._config.history_hours || 24;
+    const label = hours === 1  ? "LAST HOUR"
+                : hours === 24 ? "LAST 24 HOURS"
+                : hours < 24   ? "LAST " + hours + " HOURS"
+                : hours % 24 === 0 ? "LAST " + (hours / 24) + " DAYS"
+                : "LAST " + hours + "H";
+    return (
+      "<div style='margin-top:12px;padding-top:10px;border-top:1px solid " + t.divider + ";'>" +
+        "<div style='font-size:9px;letter-spacing:.12em;color:" + t.textMuted + ";margin-bottom:4px;'>" + label + "</div>" +
+        this._sparkline(entityId, t, t.titleColor, { height: 46 }) +
+      "</div>"
+    );
+  }
 
   // ── Internal ────────────────────────────────────────────────────────────────
 
@@ -1443,6 +1555,7 @@ class WellWaterCard extends HTMLElement {
     const readBlock =
       "<div style='flex:1;min-width:0;" + (isVertical ? "" : "padding-top:8px;") + "'>" +
       this._readings(d, t, false) +
+      this._historyBlock(c.entity, t) +
       "</div>";
 
     const bodyContent = isReverse ? readBlock + svgBlock : svgBlock + readBlock;
@@ -1486,16 +1599,18 @@ class WellWaterCard extends HTMLElement {
 
     const wellHtml = (d, idx) => {
       const { col, status, name } = d;
+      const wellEntity = (c.wells[idx] || {}).entity;
+      const historyHtml = this._historyBlock(wellEntity, t);
 
       // Stacked: full-width row with large SVG on left, readings on right
       // Side-by-side: compact column with small SVG + readings below
       const inner = stacked
         ? "<div style='display:flex;align-items:flex-start;gap:16px;'>" +
             "<div style='flex-shrink:0;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
-            "<div style='flex:1;min-width:0;padding-top:8px;'>" + this._readings(d, t, false) + "</div>" +
+            "<div style='flex:1;min-width:0;padding-top:8px;'>" + this._readings(d, t, false) + historyHtml + "</div>" +
           "</div>"
         : "<div style='display:flex;justify-content:center;'>" + this._renderSvg(d, t.shaft, "small", idx) + "</div>" +
-          "<div style='padding-top:8px;'>" + this._readings(d, t, true) + "</div>";
+          "<div style='padding-top:8px;'>" + this._readings(d, t, true) + historyHtml + "</div>";
 
       // Stacked separator between wells
       const topBorder = stacked && idx === 1
@@ -1814,6 +1929,17 @@ class WellWaterCardEditor extends HTMLElement {
             ${opt("choppy",  "Choppy")}
           </select></label>
         <label class="cb full"><input id="show_fish" type="checkbox"><span>Show fish 🐟 (just for fun)</span></label>
+        <label class="cb full"><input id="show_history" type="checkbox"><span>Show history chart below each well</span></label>
+        <label><span>History time range</span>
+          <select id="history_hours">
+            ${opt("1",   "1 hour")}
+            ${opt("6",   "6 hours")}
+            ${opt("12",  "12 hours")}
+            ${opt("24",  "24 hours (default)")}
+            ${opt("72",  "3 days")}
+            ${opt("168", "7 days")}
+            ${opt("720", "30 days")}
+          </select></label>
 
         ${layout === "single" ? `
           <label class="full"><span>Water color (OK state)</span><div class="crow">
@@ -1910,6 +2036,8 @@ class WellWaterCardEditor extends HTMLElement {
     cb("show_minmax",      c.show_minmax);
     cb("animate",          c.animate);
     cb("show_fish",        !!c.show_fish);
+    cb("show_history",     !!c.show_history);
+    sv("history_hours",    String(c.history_hours || 24));
 
     if (layout !== "dual") {
       sv("sensor_unit",  c.sensor_unit  || "m");
@@ -2009,7 +2137,7 @@ class WellWaterCardEditor extends HTMLElement {
     }
 
     // All other top-level fields
-    ["name","theme","well_style","well_position","dual_arrangement","font_size","wave_intensity",
+    ["name","theme","well_style","well_position","dual_arrangement","font_size","wave_intensity","history_hours",
      "sensor_unit","display_unit","min","max","warn_low","color",
      "card_background","card_border","text_color","title_color"
     ].forEach(f => onchange(f, f, null));
@@ -2023,6 +2151,7 @@ class WellWaterCardEditor extends HTMLElement {
     bindCb("show_minmax", "show_minmax");
     bindCb("animate",     "animate");
     bindCb("show_fish",   "show_fish");
+    bindCb("show_history","show_history");
 
     // Colour wheel → sync text input. Also routes per-well colour wheels
     // (data-for="w0_color" / "w1_color") to _setWell.
@@ -2064,7 +2193,7 @@ class WellWaterCardEditor extends HTMLElement {
 
   _set(field, val) {
     const upd = Object.assign({}, this._config);
-    const nums = ["min","max","warn_low"];
+    const nums = ["min","max","warn_low","history_hours"];
     if (nums.includes(field)) {
       upd[field] = val === "" ? undefined : +val;
     } else if (val === "" || val == null) {
