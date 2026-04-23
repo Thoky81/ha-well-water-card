@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v17
+ * Well Water Level Card  — v18
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=17   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=18   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -27,6 +27,7 @@
  *   entity_pump: binary_sensor.well_pump
  *   theme: dark             # dark | light | ha | custom
  *   well_style: dark        # dark | light | classic-pump | classic-roof | classic-crank
+ *                           # | tank-cylinder | tank-ibc | tank-barrel | tank-horizontal
  *   well_position: left     # left | right | top | bottom
  *   font_size: normal       # small | normal | large
  *   show_title: true        # false hides the card title
@@ -976,6 +977,310 @@ class WellWaterCard extends HTMLElement {
     );
   }
 
+  // ── Water-tank variants ─────────────────────────────────────────────────────
+  // Same contract as the classic variants: reuse _classicShaftInterior for the
+  // water + ticks + level arrow/label; wrap with tank-specific decoration.
+
+  // ── Cylindrical poly / plastic tank (white, domed top, base stand) ─────────
+
+  _svgTankCylLarge(d, shaft) {
+    const SX = 29, SY = 70, SW = 72, SH = 190;
+    const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, "_tc");
+    return (
+      "<svg width='130' height='290' viewBox='0 0 130 290'>" +
+      "<defs>" +
+        i.defs +
+        "<linearGradient id='_tcwall' x1='0' y1='0' x2='1' y2='0'>" +
+          "<stop offset='0%' stop-color='#9aa8b2'/><stop offset='35%' stop-color='#e0e6eb'/>" +
+          "<stop offset='65%' stop-color='#c5ccd2'/><stop offset='100%' stop-color='#7b8890'/>" +
+        "</linearGradient>" +
+        "<linearGradient id='_tcdome' x1='0' y1='0' x2='0' y2='1'>" +
+          "<stop offset='0%' stop-color='#e8edf0'/><stop offset='100%' stop-color='#b2bbc2'/>" +
+        "</linearGradient>" +
+      "</defs>" +
+      i.ticksSvg +
+      // inlet cap
+      "<rect x='59' y='42' width='12' height='8' fill='#6b7680' rx='1'/>" +
+      "<rect x='57' y='40' width='16' height='4' fill='#4a5660' rx='1'/>" +
+      // dome top
+      "<path d='M " + SX + " " + SY + " Q 65 42 " + (SX + SW) + " " + SY + " Z' fill='url(#_tcdome)'/>" +
+      // cylinder body
+      "<rect x='" + SX + "' y='" + SY + "' width='" + SW + "' height='" + SH + "' fill='url(#_tcwall)'/>" +
+      // seam ribs
+      [120, 170, 220].map(y => "<line x1='" + SX + "' y1='" + y + "' x2='" + (SX + SW) + "' y2='" + y + "' stroke='#7b8890' stroke-width='.5' opacity='.5'/>").join("") +
+      // base stand
+      "<rect x='25' y='260' width='80' height='6' fill='#4a5660' rx='1'/>" +
+      "<rect x='23' y='264' width='84' height='5' fill='#2d353c' rx='1'/>" +
+      // outlet spigot lower-right
+      "<rect x='" + (SX + SW) + "' y='235' width='10' height='6' fill='#6b7680'/>" +
+      "<rect x='" + (SX + SW + 8) + "' y='233' width='3' height='10' fill='#4a5660'/>" +
+      i.waterFill +
+      i.levelLine +
+      i.levelLabel +
+      "</svg>"
+    );
+  }
+
+  _svgTankCylSmall(d, idx, shaft) {
+    const SX = 18, SY = 50, SW = 56, SH = 150;
+    const I = "tc" + idx;
+    const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, I);
+    return (
+      "<svg width='110' height='230' viewBox='0 0 110 230'>" +
+      "<defs>" +
+        i.defs +
+        "<linearGradient id='" + I + "wall' x1='0' y1='0' x2='1' y2='0'><stop offset='0%' stop-color='#9aa8b2'/><stop offset='50%' stop-color='#e0e6eb'/><stop offset='100%' stop-color='#7b8890'/></linearGradient>" +
+      "</defs>" +
+      i.ticksSvg +
+      "<rect x='42' y='26' width='8' height='6' fill='#4a5660'/>" +
+      "<path d='M " + SX + " " + SY + " Q 46 28 " + (SX + SW) + " " + SY + " Z' fill='#c5ccd2'/>" +
+      "<rect x='" + SX + "' y='" + SY + "' width='" + SW + "' height='" + SH + "' fill='url(#" + I + "wall)'/>" +
+      "<line x1='" + SX + "' y1='100' x2='" + (SX + SW) + "' y2='100' stroke='#7b8890' stroke-width='.5' opacity='.5'/>" +
+      "<line x1='" + SX + "' y1='150' x2='" + (SX + SW) + "' y2='150' stroke='#7b8890' stroke-width='.5' opacity='.5'/>" +
+      "<rect x='15' y='" + (SY + SH + 3) + "' width='62' height='5' fill='#4a5660' rx='1'/>" +
+      i.waterFill +
+      i.levelLine +
+      i.levelLabel +
+      "</svg>"
+    );
+  }
+
+  // ── IBC tote (plastic bladder in galvanized steel cage on wooden pallet) ───
+
+  _svgTankIbcLarge(d, shaft) {
+    const SX = 25, SY = 50, SW = 80, SH = 180;
+    const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, "_ti");
+    return (
+      "<svg width='130' height='290' viewBox='0 0 130 290'>" +
+      "<defs>" +
+        i.defs +
+        "<linearGradient id='_tiplastic' x1='0' y1='0' x2='1' y2='0'>" +
+          "<stop offset='0%' stop-color='#d8dde0'/><stop offset='50%' stop-color='#f0f2f4'/>" +
+          "<stop offset='100%' stop-color='#a8b0b5'/>" +
+        "</linearGradient>" +
+      "</defs>" +
+      i.ticksSvg +
+      // top inlet cap
+      "<rect x='57' y='30' width='16' height='12' fill='#2b2b2b' rx='1'/>" +
+      "<rect x='55' y='42' width='20' height='4' fill='#1a1a1a'/>" +
+      // plastic bladder
+      "<rect x='" + SX + "' y='" + SY + "' width='" + SW + "' height='" + SH + "' fill='url(#_tiplastic)' rx='2'/>" +
+      i.waterFill +
+      // steel cage
+      "<g stroke='#4a4a4a' stroke-width='1.2' fill='none' opacity='.88'>" +
+        "<rect x='23' y='48' width='84' height='184' rx='1'/>" +
+        [39, 55, 71, 87].map(x => "<line x1='" + x + "' y1='48' x2='" + x + "' y2='232'/>").join("") +
+        [78, 110, 142, 174, 206].map(y => "<line x1='23' y1='" + y + "' x2='107' y2='" + y + "'/>").join("") +
+      "</g>" +
+      // pallet
+      "<rect x='19' y='234' width='92' height='6' fill='#8a5f3a'/>" +
+      "<rect x='19' y='240' width='92' height='4' fill='#6b4428'/>" +
+      "<line x1='37' y1='234' x2='37' y2='244' stroke='#4e3620' stroke-width='1'/>" +
+      "<line x1='65' y1='234' x2='65' y2='244' stroke='#4e3620' stroke-width='1'/>" +
+      "<line x1='93' y1='234' x2='93' y2='244' stroke='#4e3620' stroke-width='1'/>" +
+      // outlet valve
+      "<rect x='" + (SX + SW) + "' y='213' width='8' height='6' fill='#4a4a4a'/>" +
+      "<rect x='" + (SX + SW + 6) + "' y='211' width='4' height='10' fill='#2b2b2b'/>" +
+      i.levelLine +
+      i.levelLabel +
+      "</svg>"
+    );
+  }
+
+  _svgTankIbcSmall(d, idx, shaft) {
+    const SX = 16, SY = 38, SW = 60, SH = 140;
+    const I = "ti" + idx;
+    const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, I);
+    return (
+      "<svg width='110' height='230' viewBox='0 0 110 230'>" +
+      "<defs>" +
+        i.defs +
+        "<linearGradient id='" + I + "plastic' x1='0' y1='0' x2='1' y2='0'><stop offset='0%' stop-color='#d8dde0'/><stop offset='50%' stop-color='#f0f2f4'/><stop offset='100%' stop-color='#a8b0b5'/></linearGradient>" +
+      "</defs>" +
+      i.ticksSvg +
+      "<rect x='40' y='22' width='12' height='10' fill='#2b2b2b' rx='1'/>" +
+      "<rect x='" + SX + "' y='" + SY + "' width='" + SW + "' height='" + SH + "' fill='url(#" + I + "plastic)' rx='1'/>" +
+      i.waterFill +
+      "<g stroke='#4a4a4a' stroke-width='1' fill='none' opacity='.85'>" +
+        "<rect x='14' y='36' width='64' height='144' rx='1'/>" +
+        [28, 44, 60].map(x => "<line x1='" + x + "' y1='36' x2='" + x + "' y2='180'/>").join("") +
+        [66, 96, 126, 156].map(y => "<line x1='14' y1='" + y + "' x2='78' y2='" + y + "'/>").join("") +
+      "</g>" +
+      "<rect x='11' y='182' width='70' height='5' fill='#8a5f3a'/>" +
+      "<rect x='11' y='187' width='70' height='3' fill='#6b4428'/>" +
+      i.levelLine +
+      i.levelLabel +
+      "</svg>"
+    );
+  }
+
+  // ── Wooden rain barrel (staves, iron bands, downspout, brass tap) ──────────
+
+  _svgTankBarrelLarge(d, shaft) {
+    const SX = 25, SY = 60, SW = 80, SH = 180;
+    const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, "_tb");
+    return (
+      "<svg width='130' height='290' viewBox='0 0 130 290'>" +
+      "<defs>" +
+        i.defs +
+        "<linearGradient id='_tbwood' x1='0' y1='0' x2='1' y2='0'>" +
+          "<stop offset='0%' stop-color='#8a5f3a'/><stop offset='50%' stop-color='#a57349'/><stop offset='100%' stop-color='#5e3f26'/>" +
+        "</linearGradient>" +
+      "</defs>" +
+      i.ticksSvg +
+      // downspout input
+      "<rect x='89' y='38' width='8' height='22' fill='#4a4a4a'/>" +
+      "<rect x='87' y='36' width='12' height='4' fill='#2b2b2b'/>" +
+      // barrel top rim ellipse
+      "<ellipse cx='65' cy='" + SY + "' rx='40' ry='10' fill='url(#_tbwood)'/>" +
+      // barrel body
+      "<rect x='" + SX + "' y='" + SY + "' width='" + SW + "' height='" + SH + "' fill='url(#_tbwood)'/>" +
+      // bottom cap ellipse
+      "<ellipse cx='65' cy='" + (SY + SH) + "' rx='40' ry='10' fill='#4e3620'/>" +
+      // stave lines
+      "<g stroke='#4e3620' stroke-width='.8' opacity='.7'>" +
+        [35, 47, 59, 71, 83, 95].map(x => "<line x1='" + x + "' y1='" + SY + "' x2='" + x + "' y2='" + (SY + SH) + "'/>").join("") +
+      "</g>" +
+      // iron bands
+      "<rect x='23' y='70' width='84' height='5' fill='#6b6b73'/>" +
+      "<rect x='23' y='72' width='84' height='1' fill='#2b2b30'/>" +
+      "<rect x='23' y='220' width='84' height='5' fill='#6b6b73'/>" +
+      "<rect x='23' y='222' width='84' height='1' fill='#2b2b30'/>" +
+      i.waterFill +
+      // slight water-surface ellipse for 3D hint (only if water present)
+      (d.level !== null && (d.pct > 3)
+        ? "<ellipse cx='65' cy='" + (SY + SH - d.pct / 100 * SH).toFixed(2) + "' rx='40' ry='5' fill='#42a5f5' opacity='.7'/>"
+        : "") +
+      // brass tap
+      "<rect x='55' y='225' width='20' height='6' fill='#c09840'/>" +
+      "<rect x='63' y='231' width='4' height='10' fill='#8a6a28'/>" +
+      "<circle cx='65' cy='243' r='3' fill='#c09840'/>" +
+      i.levelLine +
+      i.levelLabel +
+      "</svg>"
+    );
+  }
+
+  _svgTankBarrelSmall(d, idx, shaft) {
+    const SX = 16, SY = 44, SW = 60, SH = 140;
+    const I = "tb" + idx;
+    const i = this._classicShaftInterior(d, shaft, SX, SY, SW, SH, I);
+    return (
+      "<svg width='110' height='230' viewBox='0 0 110 230'>" +
+      "<defs>" +
+        i.defs +
+        "<linearGradient id='" + I + "wood' x1='0' y1='0' x2='1' y2='0'><stop offset='0%' stop-color='#8a5f3a'/><stop offset='50%' stop-color='#a57349'/><stop offset='100%' stop-color='#5e3f26'/></linearGradient>" +
+      "</defs>" +
+      i.ticksSvg +
+      "<rect x='60' y='28' width='6' height='16' fill='#4a4a4a'/>" +
+      "<ellipse cx='46' cy='" + SY + "' rx='30' ry='7' fill='url(#" + I + "wood)'/>" +
+      "<rect x='" + SX + "' y='" + SY + "' width='" + SW + "' height='" + SH + "' fill='url(#" + I + "wood)'/>" +
+      "<ellipse cx='46' cy='" + (SY + SH) + "' rx='30' ry='7' fill='#4e3620'/>" +
+      "<g stroke='#4e3620' stroke-width='.6' opacity='.7'>" +
+        [26, 36, 46, 56, 66].map(x => "<line x1='" + x + "' y1='" + SY + "' x2='" + x + "' y2='" + (SY + SH) + "'/>").join("") +
+      "</g>" +
+      "<rect x='14' y='52' width='64' height='4' fill='#6b6b73'/>" +
+      "<rect x='14' y='178' width='64' height='4' fill='#6b6b73'/>" +
+      i.waterFill +
+      "<rect x='40' y='184' width='14' height='4' fill='#c09840'/>" +
+      "<rect x='45' y='188' width='3' height='6' fill='#8a6a28'/>" +
+      i.levelLine +
+      i.levelLabel +
+      "</svg>"
+    );
+  }
+
+  // ── Horizontal cylinder tank on saddles (propane / pressure tank look) ─────
+  // Uses its own interior helper — the capsule clip shape and the low-aspect
+  // layout don't fit the vertical _classicShaftInterior assumptions.
+
+  _svgTankHorizLarge(d, shaft) {
+    return this._horizTankSvg(d, shaft, {
+      W: 220, H: 180,
+      bodyX: 40, bodyY: 40, bodyW: 140, bodyH: 120, capR: 30,
+      idPre: "_th",
+      ticks: true,
+    });
+  }
+
+  _svgTankHorizSmall(d, idx, shaft) {
+    return this._horizTankSvg(d, shaft, {
+      W: 160, H: 130,
+      bodyX: 28, bodyY: 30, bodyW: 100, bodyH: 80, capR: 22,
+      idPre: "th" + idx,
+      ticks: false,
+    });
+  }
+
+  _horizTankSvg(d, shaft, o) {
+    const { W, H, bodyX, bodyY, bodyW, bodyH, capR, idPre, ticks } = o;
+    const { level, col, colL, unit } = d;
+    const SX = bodyX - capR, SY = bodyY, SW = bodyW + 2 * capR, SH = bodyH;
+    const SB = SY + SH;
+    const fillH = (d.pct / 100) * SH;
+    const fillY = SB - fillH;
+
+    const capsulePath =
+      "M " + bodyX + " " + SY +
+      " L " + (bodyX + bodyW) + " " + SY +
+      " A " + capR + " " + (SH / 2) + " 0 0 1 " + (bodyX + bodyW) + " " + (SY + SH) +
+      " L " + bodyX + " " + (SY + SH) +
+      " A " + capR + " " + (SH / 2) + " 0 0 1 " + bodyX + " " + SY + " Z";
+
+    // Tick marks on the left end cap (0, 50%, 100%)
+    const tickSvg = ticks
+      ? [0, 0.5, 1].map(f => {
+          const y = SB - f * SH;
+          const v = uFmt(d.min + (d.max - d.min) * f, unit);
+          return "<line x1='" + (SX - 9) + "' y1='" + y + "' x2='" + (SX - 1) + "' y2='" + y + "' stroke='" + shaft.tick + "' stroke-width='1'/>" +
+                 "<text x='" + (SX - 11) + "' y='" + (y + 3.5) + "' text-anchor='end' font-size='9' fill='" + shaft.tickTxt + "' font-family='monospace'>" + v + "</text>";
+        }).join("")
+      : "";
+
+    const levelArrow = level !== null
+      ? "<polygon points='" + (bodyX + bodyW + capR - 2) + "," + fillY + " " + (bodyX + bodyW + capR + 4) + "," + (fillY - 4) + " " + (bodyX + bodyW + capR + 4) + "," + (fillY + 4) + "' fill='" + col + "' opacity='.9'/>"
+      : "";
+    const levelLabel = (level !== null && fillH > 10)
+      ? "<text x='" + (bodyX + bodyW + capR + 9) + "' y='" + (fillY + 5) + "' font-size='" + (ticks ? 13 : 11) + "' font-weight='700' fill='" + col + "' font-family='monospace' opacity='.92'>" + uFmt(level, unit) + "</text>"
+      : "";
+
+    return (
+      "<svg width='" + W + "' height='" + H + "' viewBox='0 0 " + W + " " + H + "'>" +
+      "<defs>" +
+        "<linearGradient id='" + idPre + "body' x1='0' y1='0' x2='0' y2='1'>" +
+          "<stop offset='0%' stop-color='#c8ced3'/><stop offset='30%' stop-color='#eef1f3'/>" +
+          "<stop offset='60%' stop-color='#a0a8ae'/><stop offset='100%' stop-color='#626a70'/>" +
+        "</linearGradient>" +
+        "<linearGradient id='" + idPre + "wg' x1='0' y1='0' x2='0' y2='1'>" +
+          "<stop offset='0%' stop-color='" + colL + "' stop-opacity='.9'/>" +
+          "<stop offset='100%' stop-color='" + col + "' stop-opacity='1'/>" +
+        "</linearGradient>" +
+        "<clipPath id='" + idPre + "clip'><path d='" + capsulePath + "'/></clipPath>" +
+      "</defs>" +
+      tickSvg +
+      // tank body
+      "<path d='" + capsulePath + "' fill='url(#" + idPre + "body)'/>" +
+      // welds between sections
+      "<line x1='" + (bodyX + bodyW * 0.33) + "' y1='" + SY + "' x2='" + (bodyX + bodyW * 0.33) + "' y2='" + SB + "' stroke='#7b8088' stroke-width='.5' opacity='.6'/>" +
+      "<line x1='" + (bodyX + bodyW * 0.67) + "' y1='" + SY + "' x2='" + (bodyX + bodyW * 0.67) + "' y2='" + SB + "' stroke='#7b8088' stroke-width='.5' opacity='.6'/>" +
+      // water fill clipped to capsule
+      "<g clip-path='url(#" + idPre + "clip)'>" +
+        this._waterBody(SX, fillY, SW, fillH, "url(#" + idPre + "wg)") +
+      "</g>" +
+      // top hatch
+      "<rect x='" + (bodyX + bodyW / 2 - 12) + "' y='" + (SY - 10) + "' width='24' height='10' fill='#4a5660' rx='1'/>" +
+      "<rect x='" + (bodyX + bodyW / 2 - 14) + "' y='" + (SY - 12) + "' width='28' height='4' fill='#2d353c' rx='1'/>" +
+      // saddles
+      "<rect x='" + (bodyX + 16) + "' y='" + SB + "' width='28' height='10' fill='#4a4a4a' rx='1'/>" +
+      "<rect x='" + (bodyX + bodyW - 44) + "' y='" + SB + "' width='28' height='10' fill='#4a4a4a' rx='1'/>" +
+      "<rect x='" + (bodyX + 8) + "' y='" + (SB + 8) + "' width='44' height='5' fill='#2d353c'/>" +
+      "<rect x='" + (bodyX + bodyW - 52) + "' y='" + (SB + 8) + "' width='44' height='5' fill='#2d353c'/>" +
+      levelArrow +
+      levelLabel +
+      "</svg>"
+    );
+  }
+
   // ── SVG dispatcher ──────────────────────────────────────────────────────────
   // Routes to the right SVG builder based on well_style. Unknown styles fall
   // back to the modern (dark/light) renderer so existing configs keep working.
@@ -984,10 +1289,14 @@ class WellWaterCard extends HTMLElement {
     const style = this._config.well_style;
     const small = size === "small";
     switch (style) {
-      case "classic-pump":  return small ? this._svgPumpSmall(d, idx || 0, shaft)  : this._svgPumpLarge(d, shaft);
-      case "classic-roof":  return small ? this._svgRoofSmall(d, idx || 0, shaft)  : this._svgRoofLarge(d, shaft);
-      case "classic-crank": return small ? this._svgCrankSmall(d, idx || 0, shaft) : this._svgCrankLarge(d, shaft);
-      default:              return small ? this._svgSmall(d, idx || 0, shaft)      : this._svgLarge(d, shaft);
+      case "classic-pump":    return small ? this._svgPumpSmall(d, idx || 0, shaft)      : this._svgPumpLarge(d, shaft);
+      case "classic-roof":    return small ? this._svgRoofSmall(d, idx || 0, shaft)      : this._svgRoofLarge(d, shaft);
+      case "classic-crank":   return small ? this._svgCrankSmall(d, idx || 0, shaft)     : this._svgCrankLarge(d, shaft);
+      case "tank-cylinder":   return small ? this._svgTankCylSmall(d, idx || 0, shaft)   : this._svgTankCylLarge(d, shaft);
+      case "tank-ibc":        return small ? this._svgTankIbcSmall(d, idx || 0, shaft)   : this._svgTankIbcLarge(d, shaft);
+      case "tank-barrel":     return small ? this._svgTankBarrelSmall(d, idx || 0, shaft): this._svgTankBarrelLarge(d, shaft);
+      case "tank-horizontal": return small ? this._svgTankHorizSmall(d, idx || 0, shaft) : this._svgTankHorizLarge(d, shaft);
+      default:                return small ? this._svgSmall(d, idx || 0, shaft)          : this._svgLarge(d, shaft);
     }
   }
 
@@ -1483,6 +1792,10 @@ class WellWaterCardEditor extends HTMLElement {
             ${opt("classic-pump",   "Classic · stone + hand pump")}
             ${opt("classic-roof",   "Classic · roof + bucket")}
             ${opt("classic-crank",  "Classic · wooden + crank")}
+            ${opt("tank-cylinder",  "Tank · poly cylinder")}
+            ${opt("tank-ibc",       "Tank · IBC tote")}
+            ${opt("tank-barrel",    "Tank · wooden barrel")}
+            ${opt("tank-horizontal","Tank · horizontal cylinder")}
           </select></label>
         <label><span>Font size</span>
           <select id="font_size">

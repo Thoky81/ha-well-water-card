@@ -33,7 +33,7 @@ A Home Assistant Lovelace card that visualises a water-level (or volume) sensor 
 
 1. Copy `well-water-card.js` to `/config/www/`.
 2. Add the resource in Settings → Dashboards → Resources:
-   - URL: `/local/well-water-card.js?v=17`
+   - URL: `/local/well-water-card.js?v=18`
    - Type: **JavaScript module**
 3. Hard-refresh the browser. Bump the `?v=` number whenever you update the file.
 
@@ -100,7 +100,7 @@ wells:
 | `wave_intensity` | `calm`\|`normal`\|`lively`\|`choppy` (or a number 0..2) | `normal` | Scales wave amplitude. YAML users can set a raw number for finer control. |
 | `show_fish` | boolean | `false` | Set `true` to add a couple of fish swimming back and forth inside the water. |
 | `theme` | `dark`\|`light`\|`ha`\|`custom` | `dark` | Card theme. |
-| `well_style` | `dark`\|`light`\|`classic-pump`\|`classic-roof`\|`classic-crank` | follows theme | Illustration / shaft look. `dark` / `light` are the modern cross-section; the three `classic-*` variants add period decoration (hand pump, pitched roof with bucket, wooden drum + crank). |
+| `well_style` | `dark` \| `light` \| `classic-pump` \| `classic-roof` \| `classic-crank` \| `tank-cylinder` \| `tank-ibc` \| `tank-barrel` \| `tank-horizontal` | follows theme | Illustration / shaft look. `dark` / `light` are the modern cross-section; `classic-*` add period decoration (hand pump, roof + bucket, wooden drum + crank); `tank-*` show water-tank bodies (poly cylinder, IBC tote, wooden barrel, horizontal pressure cylinder). |
 | `well_position` | `left`\|`right`\|`top`\|`bottom` | `left` | Layout of SVG vs readings (single only). |
 | `layout` | `single`\|`dual` | `single` | Number of wells. |
 | `dual_arrangement` | `side_by_side`\|`stacked` | `side_by_side` | Dual layout. |
