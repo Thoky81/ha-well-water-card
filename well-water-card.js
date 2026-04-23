@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v11
+ * Well Water Level Card  — v12
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=11   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=12   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -31,6 +31,7 @@
  *   font_size: normal       # small | normal | large
  *   show_title: true        # false hides the card title
  *   show_minmax: true       # false hides the Min / Max row at the bottom
+ *   animate: true           # false: flat water surface (no wave animation)
  *   color: "#1e88e5"        # water tint for the "ok" state (warn/empty/full still win)
  *   # custom theme colors (only when theme: custom):
  *   card_background: "#0d1b2a"
@@ -267,6 +268,7 @@ class WellWaterCard extends HTMLElement {
         font_size:        config.font_size       || "normal",
         show_title:       config.show_title !== false,
         show_minmax:      config.show_minmax !== false,
+        animate:          config.animate !== false,
         card_background:  config.card_background  || null,
         card_border:      config.card_border      || null,
         text_color:       config.text_color       || null,
@@ -294,6 +296,7 @@ class WellWaterCard extends HTMLElement {
         font_size:       "normal",
         show_title:      true,
         show_minmax:     true,
+        animate:         true,
         card_background: null,
         card_border:     null,
         text_color:      null,
@@ -322,26 +325,41 @@ class WellWaterCard extends HTMLElement {
 
   _startAnim() {
     const tick = () => {
-      this._wave = (this._wave + 0.38) % 360;
-      const d1 = this._wavePath(this._wave,      0);
-      const d2 = this._wavePath(this._wave + 90, 1);
-      this.shadowRoot.querySelectorAll(".wp1").forEach(e => e.setAttribute("d", d1));
-      this.shadowRoot.querySelectorAll(".wp2").forEach(e => e.setAttribute("d", d2));
       this._animId = requestAnimationFrame(tick);
+      // Check the flag at tick time so the checkbox takes effect immediately
+      // without restarting anything.
+      if (this._config && this._config.animate === false) return;
+      this._wave = (this._wave + 0.38) % 360;
+      // Each path carries its own water-body height via data-h — dual mode
+      // can have two wells at different levels, so a single `d` for all
+      // .wp1 paths doesn't cut it.
+      this.shadowRoot.querySelectorAll(".wp1").forEach(e => {
+        const h = parseFloat(e.dataset.h) || 0;
+        e.setAttribute("d", this._wavePath(this._wave, 0, h));
+      });
+      this.shadowRoot.querySelectorAll(".wp2").forEach(e => {
+        const h = parseFloat(e.dataset.h) || 0;
+        e.setAttribute("d", this._wavePath(this._wave + 90, 1, h));
+      });
     };
     this._animId = requestAnimationFrame(tick);
   }
 
-  _wavePath(offset, variant) {
+  // The wave path IS the water body: wavy top oscillates around y=0,
+  // flat bottom at y=height. Callers translate it to (SX, fillY) so the
+  // wavy top lands exactly on the water surface and the flat bottom lands
+  // at the shaft floor.
+  _wavePath(offset, variant, height) {
     const rad  = offset * Math.PI / 180;
-    const amp  = variant === 0 ? 5    : 3.5;
+    const amp  = variant === 0 ? 4    : 2.5;
     const freq = variant === 0 ? 1.2  : 0.9;
     const W    = 240;
-    let d = "M0,12";
-    for (let x = 0; x <= W; x += 4) {
-      d += " L" + x + "," + (12 + Math.sin(x / W * Math.PI * 2 * freq + rad) * amp).toFixed(2);
+    const H    = Math.max(height || 0, 0);
+    let d = "M0," + (Math.sin(rad) * amp).toFixed(2);
+    for (let x = 4; x <= W; x += 4) {
+      d += " L" + x + "," + (Math.sin(x / W * Math.PI * 2 * freq + rad) * amp).toFixed(2);
     }
-    return d + " L" + W + ",80 L0,80 Z";
+    return d + " L" + W + "," + H + " L0," + H + " Z";
   }
 
   _fontScale() {
@@ -466,11 +484,7 @@ class WellWaterCard extends HTMLElement {
       "<rect x='22' y='20'  width='56' height='4'   fill='" + shaft.capRim + "' rx='2'/>" +
       "<rect x='26' y='228' width='48' height='4'   fill='" + shaft.bottom + "' rx='1'/>" +
       "<g clip-path='url(#_sc)'>" +
-        "<rect x='26' y='" + fillY + "' width='48' height='" + (fillH + 20) + "' fill='url(#_wg)' opacity='.85'/>" +
-        "<g transform='translate(26," + (fillY - 12) + ") scale(" + (48/240).toFixed(5) + ",1)'>" +
-          "<path class='wp1' d='" + this._wavePath(this._wave,      0) + "' fill='" + colL + "' opacity='.38'/>" +
-          "<path class='wp2' d='" + this._wavePath(this._wave + 90, 1) + "' fill='" + col  + "' opacity='.32'/>" +
-        "</g>" +
+        this._waterBody(26, fillY, 48, fillH, "url(#_wg)", colL) +
       "</g>" +
       "<rect x='26' y='30' width='2' height='200' fill='" + shaft.inner + "'/>" +
       levelLine +
@@ -531,11 +545,7 @@ class WellWaterCard extends HTMLElement {
       "<rect x='" + (SX-2) + "' y='" + (SY-11) + "' width='" + (SW+4) + "' height='4' fill='" + shaft.capRim + "' rx='2'/>" +
       "<rect x='" + SX + "' y='" + (SB-2) + "' width='" + SW + "' height='4' fill='" + shaft.bottom + "' rx='1'/>" +
       "<g clip-path='url(#" + I + "c)'>" +
-        "<rect x='" + SX + "' y='" + fillY + "' width='" + SW + "' height='" + (fillH + 10) + "' fill='url(#" + I + "wg)' opacity='.85'/>" +
-        "<g transform='translate(" + SX + "," + (fillY-10) + ") scale(" + (SW/240).toFixed(5) + ",1)'>" +
-          "<path class='wp1' d='" + this._wavePath(this._wave,      0) + "' fill='" + colL + "' opacity='.38'/>" +
-          "<path class='wp2' d='" + this._wavePath(this._wave + 90, 1) + "' fill='" + col  + "' opacity='.32'/>" +
-        "</g>" +
+        this._waterBody(SX, fillY, SW, fillH, "url(#" + I + "wg)", colL) +
       "</g>" +
       "<rect x='" + SX + "' y='" + SY + "' width='2' height='" + SH + "' fill='" + shaft.inner + "'/>" +
       levelLine +
@@ -593,13 +603,30 @@ class WellWaterCard extends HTMLElement {
         "</linearGradient>",
       waterFill:
         "<g clip-path='url(#" + idPre + "sc)'>" +
-          "<rect x='" + SX + "' y='" + fillY + "' width='" + SW + "' height='" + (fillH + 20) + "' fill='url(#" + idPre + "wg)' opacity='.85'/>" +
-          "<g transform='translate(" + SX + "," + (fillY - 12) + ") scale(" + (SW / 240).toFixed(5) + ",1)'>" +
-            "<path class='wp1' d='" + this._wavePath(this._wave,      0) + "' fill='" + colL + "' opacity='.38'/>" +
-            "<path class='wp2' d='" + this._wavePath(this._wave + 90, 1) + "' fill='" + col  + "' opacity='.32'/>" +
-          "</g>" +
+          this._waterBody(SX, fillY, SW, fillH, "url(#" + idPre + "wg)", colL) +
         "</g>",
     };
+  }
+
+  // Render the water body (with wavy animated top or a flat rect depending on
+  // config.animate) plus an optional subtle shimmer overlay at the surface.
+  // The wavy top of wp1 lands exactly at fillY and the flat bottom at fillY+H,
+  // so the water surface IS the animated line — no more ghost wave above or
+  // below the flat edge of a separate rect.
+  _waterBody(SX, fillY, SW, fillH, fill, colL) {
+    if (fillH <= 0) return "";
+    if (this._config && this._config.animate === false) {
+      return "<rect x='" + SX + "' y='" + fillY + "' width='" + SW + "' height='" + fillH + "' fill='" + fill + "' opacity='.9'/>";
+    }
+    const scale = (SW / 240).toFixed(5);
+    // Shimmer height: up to 16 units, but not taller than the water itself.
+    const shH = Math.min(16, fillH);
+    return (
+      "<g transform='translate(" + SX + "," + fillY + ") scale(" + scale + ",1)'>" +
+        "<path class='wp1' data-h='" + fillH + "' d='" + this._wavePath(this._wave, 0, fillH) + "' fill='" + fill + "' opacity='.9'/>" +
+        "<path class='wp2' data-h='" + shH + "' d='" + this._wavePath(this._wave + 90, 1, shH) + "' fill='" + colL + "' opacity='.35'/>" +
+      "</g>"
+    );
   }
 
   // ── Classic: stone well with cast-iron hand pump on top ─────────────────────
@@ -1381,6 +1408,7 @@ class WellWaterCardEditor extends HTMLElement {
           </select></label>
         <label class="cb full"><input id="show_title" type="checkbox"><span>Show card title</span></label>
         <label class="cb full"><input id="show_minmax" type="checkbox"><span>Show Min / Max at the bottom</span></label>
+        <label class="cb full"><input id="animate" type="checkbox"><span>Animate water (wavy surface)</span></label>
 
         ${layout === "single" ? `
           <label class="full"><span>Water color (OK state)</span><div class="crow">
@@ -1472,6 +1500,7 @@ class WellWaterCardEditor extends HTMLElement {
     sv("font_size",        c.font_size        || "normal");
     cb("show_title",       c.show_title);
     cb("show_minmax",      c.show_minmax);
+    cb("animate",          c.animate);
 
     if (layout !== "dual") {
       sv("sensor_unit",  c.sensor_unit  || "m");
@@ -1583,6 +1612,7 @@ class WellWaterCardEditor extends HTMLElement {
     };
     bindCb("show_title",  "show_title");
     bindCb("show_minmax", "show_minmax");
+    bindCb("animate",     "animate");
 
     // Colour wheel → sync text input. Also routes per-well colour wheels
     // (data-for="w0_color" / "w1_color") to _setWell.
