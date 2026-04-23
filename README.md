@@ -33,7 +33,7 @@ A Home Assistant Lovelace card that visualises a water-level (or volume) sensor 
 
 1. Copy `well-water-card.js` to `/config/www/`.
 2. Add the resource in Settings → Dashboards → Resources:
-   - URL: `/local/well-water-card.js?v=23`
+   - URL: `/local/well-water-card.js?v=24`
    - Type: **JavaScript module**
 3. Hard-refresh the browser. Bump the `?v=` number whenever you update the file.
 
@@ -101,6 +101,7 @@ wells:
 | `show_fish` | boolean | `false` | Set `true` to add a couple of fish swimming back and forth inside the water. |
 | `show_history` | boolean | `false` | Set `true` to show a history sparkline below each well. Fetched from HA's recorder, refreshed every ~5 minutes. |
 | `history_hours` | number | `24` | Time range for the history chart. Common values: `1`, `6`, `12`, `24`, `72`, `168`, `720`. |
+| `font_family` | `mono` \| `ha` \| `sans` \| `serif` (or any CSS font-family) | `mono` | Font stack. Presets: `mono` = JetBrains Mono (default), `ha` = your HA theme's primary font, `sans`/`serif` = system stacks. YAML can also take a raw CSS value like `"Comic Sans MS, cursive"`. |
 | `theme` | `dark`\|`light`\|`ha`\|`custom` | `dark` | Card theme. |
 | `well_style` | `dark` \| `light` \| `classic-pump` \| `classic-roof` \| `classic-crank` \| `tank-cylinder` \| `tank-ibc` \| `tank-barrel` \| `tank-horizontal` | follows theme | Illustration / shaft look. `dark` / `light` are the modern cross-section; `classic-*` add period decoration (hand pump, roof + bucket, wooden drum + crank); `tank-*` show water-tank bodies (poly cylinder, IBC tote, wooden barrel, horizontal pressure cylinder). |
 | `well_position` | `left`\|`right`\|`top`\|`bottom` | `left` | Layout of SVG vs readings (single only). |

@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v23
+ * Well Water Level Card  — v24
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=23   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=24   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -37,6 +37,7 @@
  *   show_fish: false        # true: a couple of fish swim back and forth in the water
  *   show_history: false     # true: sparkline of recent sensor history below the readings
  *   history_hours: 24       # time range for the history chart in hours
+ *   font_family: mono       # mono | ha | sans | serif  (or any CSS font-family string)
  *   color: "#1e88e5"        # water tint for the "ok" state (warn/empty/full still win)
  *   # custom theme colors (only when theme: custom):
  *   card_background: "#0d1b2a"
@@ -162,9 +163,12 @@ const CARD_THEMES = {
     cardBorder: "1px solid #1a2d42",
     glow:       "radial-gradient(ellipse at 50% 0%, rgba(30,136,229,0.07) 0%, transparent 70%)",
     textBody:   "#c8d8e8",
-    textSub:    "#4a7fa5",
-    textMuted:  "#3d6280",
-    titleColor: "#4a7fa5",
+    // Bumped textSub and textMuted (was #4a7fa5 and #3d6280) — the old values
+    // had WCAG contrast around 2:1 and 3:1 against the dark card bg which
+    // made the MIN/MAX/history labels and small text basically unreadable.
+    textSub:    "#6e9dc2",
+    textMuted:  "#8ba8c2",
+    titleColor: "#5e93c0",
     divider:    "#1a2d42",
     barBg:      "#0d1f30",
     wellStyle:  "dark",
@@ -278,6 +282,7 @@ class WellWaterCard extends HTMLElement {
         show_fish:        config.show_fish === true,
         show_history:     config.show_history === true,
         history_hours:    +config.history_hours || 24,
+        font_family:      config.font_family    || null,
         card_background:  config.card_background  || null,
         card_border:      config.card_border      || null,
         text_color:       config.text_color       || null,
@@ -310,6 +315,7 @@ class WellWaterCard extends HTMLElement {
         show_fish:       false,
         show_history:    false,
         history_hours:   24,
+        font_family:     null,
         card_background: null,
         card_border:     null,
         text_color:      null,
@@ -570,6 +576,19 @@ class WellWaterCard extends HTMLElement {
   _fontScale() {
     const s = this._config && this._config.font_size;
     return s === "small" ? 0.85 : s === "large" ? 1.2 : 1.0;
+  }
+
+  // Resolve font-family. Named presets map to common stacks; anything else
+  // (including raw CSS like "Comic Sans MS, cursive") is passed through.
+  _fontFamily() {
+    const raw = (this._config && this._config.font_family) || "mono";
+    const presets = {
+      "mono":  "'JetBrains Mono', 'Courier New', monospace",
+      "ha":    "var(--primary-font-family, sans-serif)",
+      "sans":  "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+      "serif": "Georgia, 'Times New Roman', serif",
+    };
+    return presets[raw] || raw;
   }
 
   _getTheme() {
@@ -1362,9 +1381,12 @@ class WellWaterCard extends HTMLElement {
   // layout don't fit the vertical _classicShaftInterior assumptions.
 
   _svgTankHorizLarge(d, shaft) {
+    // Wider canvas so the level number on the right isn't clipped, and the
+    // tick labels on the left have room. Taller body so the tank fills more
+    // of the 290px SVG slot when mixed with vertical styles.
     return this._horizTankSvg(d, shaft, {
-      W: 220, H: 180,
-      bodyX: 40, bodyY: 40, bodyW: 140, bodyH: 120, capR: 30,
+      W: 290, H: 220,
+      bodyX: 70, bodyY: 50, bodyW: 140, bodyH: 160, capR: 30,
       idPre: "_th",
       ticks: true,
     });
@@ -1372,8 +1394,8 @@ class WellWaterCard extends HTMLElement {
 
   _svgTankHorizSmall(d, idx, shaft) {
     return this._horizTankSvg(d, shaft, {
-      W: 160, H: 130,
-      bodyX: 28, bodyY: 30, bodyW: 100, bodyH: 80, capR: 22,
+      W: 220, H: 170,
+      bodyX: 46, bodyY: 40, bodyW: 100, bodyH: 100, capR: 22,
       idPre: "th" + idx,
       ticks: false,
     });
@@ -1475,11 +1497,12 @@ class WellWaterCard extends HTMLElement {
   // ── Shared CSS ───────────────────────────────────────────────────────────────
 
   _css(t) {
+    const ff = this._fontFamily();
     return (
       // height:100% on host + ha-card makes the card fill its grid cell in
       // the Sections view when HA assigns a specific row count. Default
       // dashboards aren't affected because the parent has no forced height.
-      ":host { display: block; height: 100%; font-family: 'JetBrains Mono', 'Courier New', monospace; }" +
+      ":host { display: block; height: 100%; font-family: " + ff + "; }" +
       "ha-card { display: block; height: 100%; }" +
       ".card { background: " + t.cardBg + "; border: " + t.cardBorder + "; border-radius: 16px; color: " + t.textBody + "; position: relative; overflow: hidden; box-sizing: border-box; }" +
       ".card::before { content: ''; position: absolute; inset: 0; background: " + t.glow + "; pointer-events: none; }" +
@@ -1616,7 +1639,7 @@ class WellWaterCard extends HTMLElement {
     // predictable level. Shorter SVGs like tank-horizontal sit at the top
     // and get the extra space below.
     const svgBlock =
-      "<div class='svg-wrap' style='flex-shrink:0;min-height:290px;display:flex;flex-direction:column;align-items:" + (isVertical ? "center" : "flex-start") + ";'>" +
+      "<div class='svg-wrap' style='flex-shrink:0;min-height:290px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" +
       this._renderSvg(d, t.shaft, "large") +
       "</div>";
 
@@ -1680,10 +1703,10 @@ class WellWaterCard extends HTMLElement {
       // column a readings row 100+ px higher than the other.
       const inner = stacked
         ? "<div style='display:flex;align-items:flex-start;gap:16px;'>" +
-            "<div style='flex-shrink:0;min-height:290px;display:flex;flex-direction:column;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
+            "<div style='flex-shrink:0;min-height:290px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
             "<div style='flex:1;min-width:0;padding-top:8px;'>" + this._readings(d, t, false) + historyHtml + "</div>" +
           "</div>"
-        : "<div style='display:flex;justify-content:center;align-items:flex-start;min-height:230px;'>" + this._renderSvg(d, t.shaft, "small", idx) + "</div>" +
+        : "<div style='display:flex;justify-content:center;align-items:center;min-height:230px;'>" + this._renderSvg(d, t.shaft, "small", idx) + "</div>" +
           "<div style='padding-top:8px;'>" + this._readings(d, t, true) + historyHtml + "</div>";
 
       // Stacked separator between wells
@@ -2033,6 +2056,13 @@ class WellWaterCardEditor extends HTMLElement {
             ${opt("normal", "Normal (default)")}
             ${opt("large",  "Large")}
           </select></label>
+        <label><span>Font family</span>
+          <select id="font_family">
+            ${opt("mono",  "Monospace (default)")}
+            ${opt("ha",    "HA theme font")}
+            ${opt("sans",  "Sans-serif")}
+            ${opt("serif", "Serif")}
+          </select></label>
         <label class="cb full"><input id="show_title" type="checkbox"><span>Show card title</span></label>
         <label class="cb full"><input id="show_minmax" type="checkbox"><span>Show Min / Max at the bottom</span></label>
         <label class="cb full"><input id="animate" type="checkbox"><span>Animate water (wavy surface)</span></label>
@@ -2144,6 +2174,12 @@ class WellWaterCardEditor extends HTMLElement {
     sv("well_position",    c.well_position    || "left");
     sv("dual_arrangement", c.dual_arrangement || "side_by_side");
     sv("font_size",        c.font_size        || "normal");
+    // font_family may be a preset key OR any raw CSS string. Only map to
+    // the dropdown when it's a known preset; otherwise leave it empty and
+    // the dropdown stays at default while the user's custom YAML value is
+    // preserved in config (_bindEvents' onchange won't fire unless they
+    // pick a preset).
+    sv("font_family",      (["mono","ha","sans","serif"].includes(c.font_family) ? c.font_family : "mono"));
     // wave_intensity may be a preset name or a number; the dropdown only
     // knows the preset names, so fall back to "normal" for numeric values.
     sv("wave_intensity",   typeof c.wave_intensity === "string" ? c.wave_intensity : "normal");
@@ -2253,7 +2289,7 @@ class WellWaterCardEditor extends HTMLElement {
     }
 
     // All other top-level fields
-    ["name","theme","well_style","well_position","dual_arrangement","font_size","wave_intensity","history_hours",
+    ["name","theme","well_style","well_position","dual_arrangement","font_size","font_family","wave_intensity","history_hours",
      "sensor_unit","display_unit","min","max","warn_low","color",
      "card_background","card_border","text_color","title_color"
     ].forEach(f => onchange(f, f, null));
