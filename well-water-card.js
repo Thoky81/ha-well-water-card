@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v13
+ * Well Water Level Card  — v14
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=13   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=14   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -337,10 +337,6 @@ class WellWaterCard extends HTMLElement {
         const h = parseFloat(e.dataset.h) || 0;
         e.setAttribute("d", this._wavePath(this._wave, 0, h));
       });
-      this.shadowRoot.querySelectorAll(".wp2").forEach(e => {
-        const h = parseFloat(e.dataset.h) || 0;
-        e.setAttribute("d", this._wavePath(this._wave + 90, 1, h));
-      });
     };
     this._animId = requestAnimationFrame(tick);
   }
@@ -349,15 +345,26 @@ class WellWaterCard extends HTMLElement {
   // flat bottom at y=height. Callers translate it to (SX, fillY) so the
   // wavy top lands exactly on the water surface and the flat bottom lands
   // at the shaft floor.
-  _wavePath(offset, variant, height) {
-    const rad  = offset * Math.PI / 180;
-    const amp  = variant === 0 ? 4    : 2.5;
-    const freq = variant === 0 ? 1.2  : 0.9;
-    const W    = 240;
-    const H    = Math.max(height || 0, 0);
-    let d = "M0," + (Math.sin(rad) * amp).toFixed(2);
+  //
+  // Surface shape is three sines blended at co-prime-ish frequencies with
+  // different phase speeds, so the pattern never exactly repeats — feels
+  // more like natural water than a clean sine wave. Max peak-to-peak is
+  // ~4 units (vs a clean-sine amp of 4), but typical instantaneous height
+  // is smaller due to phase cancellation — the surface reads as gentle
+  // rather than mechanical.
+  _wavePath(offset, _variant, height) {
+    const rad = offset * Math.PI / 180;
+    const W   = 240;
+    const H   = Math.max(height || 0, 0);
+    const y = x => {
+      const u = x / W * Math.PI * 2;
+      return 1.2 * Math.sin(u * 1.2 + rad) +
+             0.6 * Math.sin(u * 2.3 + rad * 1.7 + 1.1) +
+             0.7 * Math.sin(u * 0.7 + rad * 0.55 + 2.3);
+    };
+    let d = "M0," + y(0).toFixed(2);
     for (let x = 4; x <= W; x += 4) {
-      d += " L" + x + "," + (Math.sin(x / W * Math.PI * 2 * freq + rad) * amp).toFixed(2);
+      d += " L" + x + "," + y(x).toFixed(2);
     }
     return d + " L" + W + "," + H + " L0," + H + " Z";
   }
