@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v15
+ * Well Water Level Card  — v16
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=15   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=16   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -32,6 +32,8 @@
  *   show_title: true        # false hides the card title
  *   show_minmax: true       # false hides the Min / Max row at the bottom
  *   animate: true           # false: flat water surface (no wave animation)
+ *   wave_intensity: normal  # calm | normal | lively | choppy  (or a number 0..2)
+ *   show_fish: false        # true: a couple of fish swim back and forth in the water
  *   color: "#1e88e5"        # water tint for the "ok" state (warn/empty/full still win)
  *   # custom theme colors (only when theme: custom):
  *   card_background: "#0d1b2a"
@@ -269,6 +271,8 @@ class WellWaterCard extends HTMLElement {
         show_title:       config.show_title !== false,
         show_minmax:      config.show_minmax !== false,
         animate:          config.animate !== false,
+        wave_intensity:   config.wave_intensity != null ? config.wave_intensity : "normal",
+        show_fish:        config.show_fish === true,
         card_background:  config.card_background  || null,
         card_border:      config.card_border      || null,
         text_color:       config.text_color       || null,
@@ -297,6 +301,8 @@ class WellWaterCard extends HTMLElement {
         show_title:      true,
         show_minmax:     true,
         animate:         true,
+        wave_intensity:  "normal",
+        show_fish:       false,
         card_background: null,
         card_border:     null,
         text_color:      null,
@@ -337,6 +343,19 @@ class WellWaterCard extends HTMLElement {
         const h = parseFloat(e.dataset.h) || 0;
         e.setAttribute("d", this._wavePath(this._wave, 0, h));
       });
+      // Fish animation — back-and-forth swim with a flip at each turnaround.
+      // Driving from the same tick keeps them in sync with the water animation
+      // and pauses them automatically when animate is false.
+      const ts = performance.now() / 1000;
+      this.shadowRoot.querySelectorAll(".fish").forEach(f => {
+        const dur   = parseFloat(f.dataset.dur)   || 12;
+        const range = parseFloat(f.dataset.range) || 0;
+        const delay = parseFloat(f.dataset.delay) || 0;
+        const phase = (((ts + delay) / dur) % 1 + 1) % 1;
+        const x    = phase < 0.5 ? phase * 2 * range : (1 - phase) * 2 * range;
+        const flip = phase < 0.5 ? 1 : -1;
+        f.setAttribute("transform", "translate(" + x.toFixed(2) + ",0) scale(" + flip + ",1)");
+      });
     };
     this._animId = requestAnimationFrame(tick);
   }
@@ -356,17 +375,27 @@ class WellWaterCard extends HTMLElement {
     const rad = offset * Math.PI / 180;
     const W   = 240;
     const H   = Math.max(height || 0, 0);
+    const m   = this._waveMult();
     const y = x => {
       const u = x / W * Math.PI * 2;
-      return 1.2 * Math.sin(u * 1.2 + rad) +
-             0.6 * Math.sin(u * 2.3 + rad * 1.7 + 1.1) +
-             0.7 * Math.sin(u * 0.7 + rad * 0.55 + 2.3);
+      return m * (1.2 * Math.sin(u * 1.2 + rad) +
+                  0.6 * Math.sin(u * 2.3 + rad * 1.7 + 1.1) +
+                  0.7 * Math.sin(u * 0.7 + rad * 0.55 + 2.3));
     };
     let d = "M0," + y(0).toFixed(2);
     for (let x = 4; x <= W; x += 4) {
       d += " L" + x + "," + y(x).toFixed(2);
     }
     return d + " L" + W + "," + H + " L0," + H + " Z";
+  }
+
+  // Multiplier applied to all three sine amplitudes in _wavePath. Accepts
+  // either a named preset or a raw number (for YAML users who want finer
+  // control than the editor presets allow).
+  _waveMult() {
+    const s = this._config && this._config.wave_intensity;
+    if (typeof s === "number" && s >= 0) return s;
+    return ({ calm: 0.5, normal: 1.0, lively: 1.5, choppy: 2.2 })[s] || 1.0;
   }
 
   _fontScale() {
@@ -618,19 +647,43 @@ class WellWaterCard extends HTMLElement {
   // Render the water body: wavy animated top or a flat rect depending on
   // config.animate. The wavy top of wp1 lands exactly at fillY and the flat
   // bottom at fillY+H, so the water surface IS the animated line — one path,
-  // one shape. (Previously there was a translucent shimmer overlay too, but
-  // it just made the surface look like two separate wave layers.)
+  // one shape. Fish are rendered after the water so they sit on top of it.
   _waterBody(SX, fillY, SW, fillH, fill /* colL unused, kept for callers */) {
     if (fillH <= 0) return "";
-    if (this._config && this._config.animate === false) {
-      return "<rect x='" + SX + "' y='" + fillY + "' width='" + SW + "' height='" + fillH + "' fill='" + fill + "' opacity='.9'/>";
-    }
-    const scale = (SW / 240).toFixed(5);
-    return (
-      "<g transform='translate(" + SX + "," + fillY + ") scale(" + scale + ",1)'>" +
-        "<path class='wp1' data-h='" + fillH + "' d='" + this._wavePath(this._wave, 0, fillH) + "' fill='" + fill + "' opacity='.92'/>" +
-      "</g>"
-    );
+    const water = (this._config && this._config.animate === false)
+      ? "<rect x='" + SX + "' y='" + fillY + "' width='" + SW + "' height='" + fillH + "' fill='" + fill + "' opacity='.9'/>"
+      : ("<g transform='translate(" + SX + "," + fillY + ") scale(" + (SW / 240).toFixed(5) + ",1)'>" +
+           "<path class='wp1' data-h='" + fillH + "' d='" + this._wavePath(this._wave, 0, fillH) + "' fill='" + fill + "' opacity='.92'/>" +
+         "</g>");
+    return water + this._fishSvg(SX, fillY, SW, fillH);
+  }
+
+  // Renders 0..N small fish inside the water. Each fish is a <g class="fish">
+  // with data-dur / data-range / data-delay; the animation loop reads those
+  // and sets a translate + scaleX transform every frame, so fish swim back
+  // and forth and flip when they hit the edge.
+  _fishSvg(SX, fillY, SW, fillH) {
+    const c = this._config;
+    if (!c || !c.show_fish || fillH < 22) return "";
+    // Each entry: swim depth (fraction of water column), color, period in
+    // seconds for one full there-and-back cycle, phase offset in seconds.
+    const school = [
+      { depth: 0.35, color: "#ffa726", dur: 13, delay: 0 },
+      { depth: 0.70, color: "#90a4ae", dur: 19, delay: -6 },
+    ];
+    const fishW = 7;
+    const range = Math.max(SW - fishW - 2, 0);
+    return school.map((f, i) => {
+      const y = fillY + fillH * f.depth;
+      const cx = SX + 1;
+      return "<g transform='translate(" + cx + "," + y.toFixed(2) + ")'>" +
+               "<g class='fish' data-dur='" + f.dur + "' data-range='" + range + "' data-delay='" + f.delay + "'>" +
+                 "<ellipse cx='0' cy='0' rx='3.2' ry='1.6' fill='" + f.color + "' opacity='.92'/>" +
+                 "<polygon points='3.2,0 5.8,-2 5.8,2' fill='" + f.color + "' opacity='.92'/>" +
+                 "<circle cx='-1.4' cy='-.3' r='.45' fill='#fff'/>" +
+               "</g>" +
+             "</g>";
+    }).join("");
   }
 
   // ── Classic: stone well with cast-iron hand pump on top ─────────────────────
@@ -1413,6 +1466,14 @@ class WellWaterCardEditor extends HTMLElement {
         <label class="cb full"><input id="show_title" type="checkbox"><span>Show card title</span></label>
         <label class="cb full"><input id="show_minmax" type="checkbox"><span>Show Min / Max at the bottom</span></label>
         <label class="cb full"><input id="animate" type="checkbox"><span>Animate water (wavy surface)</span></label>
+        <label><span>Wave intensity</span>
+          <select id="wave_intensity">
+            ${opt("calm",    "Calm")}
+            ${opt("normal",  "Normal (default)")}
+            ${opt("lively",  "Lively")}
+            ${opt("choppy",  "Choppy")}
+          </select></label>
+        <label class="cb full"><input id="show_fish" type="checkbox"><span>Show fish 🐟 (just for fun)</span></label>
 
         ${layout === "single" ? `
           <label class="full"><span>Water color (OK state)</span><div class="crow">
@@ -1502,9 +1563,13 @@ class WellWaterCardEditor extends HTMLElement {
     sv("well_position",    c.well_position    || "left");
     sv("dual_arrangement", c.dual_arrangement || "side_by_side");
     sv("font_size",        c.font_size        || "normal");
+    // wave_intensity may be a preset name or a number; the dropdown only
+    // knows the preset names, so fall back to "normal" for numeric values.
+    sv("wave_intensity",   typeof c.wave_intensity === "string" ? c.wave_intensity : "normal");
     cb("show_title",       c.show_title);
     cb("show_minmax",      c.show_minmax);
     cb("animate",          c.animate);
+    cb("show_fish",        !!c.show_fish);
 
     if (layout !== "dual") {
       sv("sensor_unit",  c.sensor_unit  || "m");
@@ -1604,7 +1669,7 @@ class WellWaterCardEditor extends HTMLElement {
     }
 
     // All other top-level fields
-    ["name","theme","well_style","well_position","dual_arrangement","font_size",
+    ["name","theme","well_style","well_position","dual_arrangement","font_size","wave_intensity",
      "sensor_unit","display_unit","min","max","warn_low","color",
      "card_background","card_border","text_color","title_color"
     ].forEach(f => onchange(f, f, null));
@@ -1617,6 +1682,7 @@ class WellWaterCardEditor extends HTMLElement {
     bindCb("show_title",  "show_title");
     bindCb("show_minmax", "show_minmax");
     bindCb("animate",     "animate");
+    bindCb("show_fish",   "show_fish");
 
     // Colour wheel → sync text input. Also routes per-well colour wheels
     // (data-for="w0_color" / "w1_color") to _setWell.
