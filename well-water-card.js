@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v24
+ * Well Water Level Card  — v25
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=24   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=25   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -162,13 +162,12 @@ const CARD_THEMES = {
     cardBg:     "#0d1b2a",
     cardBorder: "1px solid #1a2d42",
     glow:       "radial-gradient(ellipse at 50% 0%, rgba(30,136,229,0.07) 0%, transparent 70%)",
-    textBody:   "#c8d8e8",
-    // Bumped textSub and textMuted (was #4a7fa5 and #3d6280) — the old values
-    // had WCAG contrast around 2:1 and 3:1 against the dark card bg which
-    // made the MIN/MAX/history labels and small text basically unreadable.
-    textSub:    "#6e9dc2",
-    textMuted:  "#8ba8c2",
-    titleColor: "#5e93c0",
+    textBody:   "#dae7f2",
+    // Lighter muted palette — WCAG contrast now ~8–9:1 for textMuted and
+    // ~7:1 for textSub on the #0d1b2a card bg.
+    textSub:    "#9cbfdd",
+    textMuted:  "#b4cbdf",
+    titleColor: "#7eafd3",
     divider:    "#1a2d42",
     barBg:      "#0d1f30",
     wellStyle:  "dark",
@@ -190,8 +189,13 @@ const CARD_THEMES = {
     cardBorder: "none",
     glow:       "none",
     textBody:   "var(--primary-text-color, #212121)",
+    // Use --secondary-text-color for BOTH sub and muted — the old code used
+    // --disabled-text-color for muted, which is typically much too dim on
+    // dark HA themes (often ~#555 on black). Now both map to the theme's
+    // secondary text color, which is the brightest "not-primary" variable
+    // HA provides.
     textSub:    "var(--secondary-text-color, #727272)",
-    textMuted:  "var(--disabled-text-color, #9e9e9e)",
+    textMuted:  "var(--secondary-text-color, #727272)",
     titleColor: "var(--primary-color, #1e88e5)",
     divider:    "var(--divider-color, #e0e0e0)",
     barBg:      "var(--secondary-background-color, #f5f5f5)",
@@ -464,9 +468,10 @@ class WellWaterCard extends HTMLElement {
                 : hours < 24   ? "LAST " + hours + " HOURS"
                 : hours % 24 === 0 ? "LAST " + (hours / 24) + " DAYS"
                 : "LAST " + hours + "H";
+    const headerFs = Math.round(11 * this._fontScale());
     return (
       "<div style='margin-top:12px;padding-top:10px;border-top:1px solid " + t.divider + ";'>" +
-        "<div style='font-size:9px;letter-spacing:.12em;color:" + t.textMuted + ";margin-bottom:4px;'>" + label + "</div>" +
+        "<div style='font-size:" + headerFs + "px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:" + t.textMuted + ";margin-bottom:6px;'>" + label + "</div>" +
         this._sparkline(entityId, t, t.titleColor, { height: 46 }) +
       "</div>"
     );
@@ -1509,9 +1514,9 @@ class WellWaterCard extends HTMLElement {
       ".divider { height: 1px; background: " + t.divider + "; margin: 11px 0; }" +
       ".bar-w { height: 4px; background: " + t.barBg + "; border-radius: 2px; overflow: hidden; }" +
       ".bar-f { height: 100%; border-radius: 2px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }" +
-      ".mi { display: flex; flex-direction: column; gap: 2px; }" +
-      ".ml { font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: " + t.textMuted + "; }" +
-      ".mv { font-size: 11px; color: " + t.textSub + "; }" +
+      ".mi { display: flex; flex-direction: column; gap: 3px; }" +
+      ".ml { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: " + t.textMuted + "; }" +
+      ".mv { font-size: 13px; color: " + t.textSub + "; }" +
       "@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }"
     );
   }
@@ -1524,6 +1529,9 @@ class WellWaterCard extends HTMLElement {
     const scale = this._fontScale();
     const fsBig   = Math.round((compact ? 22 : 32) * scale) + "px";
     const fsSmall = Math.round((compact ? 11 : 13) * scale) + "px";
+    // Bigger LEVEL / VOLUME label — was 9px, now 11 (non-compact). Bold too
+    // so the section header reads as a real label, not a whisper.
+    const fsLabel = Math.round((compact ? 9 : 11) * scale) + "px";
 
     const pumpHtml = pumpOn !== null
       ? "<div class='mi'><div class='ml'>Pump</div><div class='mv'>" +
@@ -1554,7 +1562,7 @@ class WellWaterCard extends HTMLElement {
       : "";
 
     return (
-      "<div style='font-size:" + (compact?"8px":"9px") + ";letter-spacing:.12em;text-transform:uppercase;color:" + t.textMuted + ";margin-bottom:2px;'>" + lbl + "</div>" +
+      "<div style='font-size:" + fsLabel + ";font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:" + t.textMuted + ";margin-bottom:4px;'>" + lbl + "</div>" +
       "<div style='font-size:" + fsBig + ";font-weight:700;color:" + col + ";line-height:1;letter-spacing:-.02em;text-shadow:0 0 20px " + glow + ";'>" +
         (level !== null ? uFmt(level, unit) : "—") +
         "<span style='font-size:" + fsSmall + ";color:" + t.textMuted + ";margin-left:2px;'>" + ul + "</span>" +
@@ -1734,7 +1742,7 @@ class WellWaterCard extends HTMLElement {
       ".chdr{display:flex;align-items:center;margin-bottom:14px;}" +
       ".ctitle{font-size:" + Math.round(11 * scale) + "px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:" + t.titleColor + ";}" +
       ".bar-w{height:3px;}" +
-      ".ml{font-size:" + Math.round(7 * scale) + "px;} .mv{font-size:" + Math.round(10 * scale) + "px;}" +
+      ".ml{font-size:" + Math.round(9 * scale) + "px;} .mv{font-size:" + Math.round(12 * scale) + "px;}" +
       ".grid.sbs{display:grid;grid-template-columns:1fr 1fr;gap:0;}" +
       ".grid.stacked{display:flex;flex-direction:column;}" +
       ".grid.sbs .col0{border-right:1px solid " + t.divider + ";padding-right:14px;}" +
