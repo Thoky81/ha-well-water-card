@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v12
+ * Well Water Level Card  — v13
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=12   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=13   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -608,23 +608,20 @@ class WellWaterCard extends HTMLElement {
     };
   }
 
-  // Render the water body (with wavy animated top or a flat rect depending on
-  // config.animate) plus an optional subtle shimmer overlay at the surface.
-  // The wavy top of wp1 lands exactly at fillY and the flat bottom at fillY+H,
-  // so the water surface IS the animated line — no more ghost wave above or
-  // below the flat edge of a separate rect.
-  _waterBody(SX, fillY, SW, fillH, fill, colL) {
+  // Render the water body: wavy animated top or a flat rect depending on
+  // config.animate. The wavy top of wp1 lands exactly at fillY and the flat
+  // bottom at fillY+H, so the water surface IS the animated line — one path,
+  // one shape. (Previously there was a translucent shimmer overlay too, but
+  // it just made the surface look like two separate wave layers.)
+  _waterBody(SX, fillY, SW, fillH, fill /* colL unused, kept for callers */) {
     if (fillH <= 0) return "";
     if (this._config && this._config.animate === false) {
       return "<rect x='" + SX + "' y='" + fillY + "' width='" + SW + "' height='" + fillH + "' fill='" + fill + "' opacity='.9'/>";
     }
     const scale = (SW / 240).toFixed(5);
-    // Shimmer height: up to 16 units, but not taller than the water itself.
-    const shH = Math.min(16, fillH);
     return (
       "<g transform='translate(" + SX + "," + fillY + ") scale(" + scale + ",1)'>" +
-        "<path class='wp1' data-h='" + fillH + "' d='" + this._wavePath(this._wave, 0, fillH) + "' fill='" + fill + "' opacity='.9'/>" +
-        "<path class='wp2' data-h='" + shH + "' d='" + this._wavePath(this._wave + 90, 1, shH) + "' fill='" + colL + "' opacity='.35'/>" +
+        "<path class='wp1' data-h='" + fillH + "' d='" + this._wavePath(this._wave, 0, fillH) + "' fill='" + fill + "' opacity='.92'/>" +
       "</g>"
     );
   }
