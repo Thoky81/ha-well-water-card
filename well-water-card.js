@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v16
+ * Well Water Level Card  — v17
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=16   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=17   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -343,18 +343,41 @@ class WellWaterCard extends HTMLElement {
         const h = parseFloat(e.dataset.h) || 0;
         e.setAttribute("d", this._wavePath(this._wave, 0, h));
       });
-      // Fish animation — back-and-forth swim with a flip at each turnaround.
-      // Driving from the same tick keeps them in sync with the water animation
-      // and pauses them automatically when animate is false.
+      // Fish animation — smooth pseudo-random motion driven by a blend of
+      // sines at co-prime-ish frequencies. Each fish has its own seed so the
+      // pair never moves in lockstep, and the pattern doesn't visibly repeat.
+      // Facing flips based on instantaneous horizontal velocity sign.
       const ts = performance.now() / 1000;
       this.shadowRoot.querySelectorAll(".fish").forEach(f => {
-        const dur   = parseFloat(f.dataset.dur)   || 12;
-        const range = parseFloat(f.dataset.range) || 0;
-        const delay = parseFloat(f.dataset.delay) || 0;
-        const phase = (((ts + delay) / dur) % 1 + 1) % 1;
-        const x    = phase < 0.5 ? phase * 2 * range : (1 - phase) * 2 * range;
-        const flip = phase < 0.5 ? 1 : -1;
-        f.setAttribute("transform", "translate(" + x.toFixed(2) + ",0) scale(" + flip + ",1)");
+        const seed  = parseFloat(f.dataset.seed)   || 0;
+        const xR    = parseFloat(f.dataset.xrange) || 0;
+        const yR    = parseFloat(f.dataset.yrange) || 0;
+        const speed = parseFloat(f.dataset.speed)  || 1;
+        // Sample two nearby phases — current and slightly earlier — so we can
+        // derive direction (flip) from the sign of dx/dt without extra state.
+        const xAt = s => {
+          // 4 sines, incommensurate frequencies, clamped into [0,1].
+          const raw = 0.5
+            + 0.30 * Math.sin(s * 0.51 + seed)
+            + 0.14 * Math.sin(s * 1.13 + seed * 1.7 + 0.9)
+            + 0.08 * Math.sin(s * 2.27 + seed * 0.6 + 2.1)
+            + 0.05 * Math.sin(s * 3.41 + seed * 2.3);
+          return Math.max(0, Math.min(1, raw));
+        };
+        const yAt = s =>
+          0.55 * Math.sin(s * 0.73 + seed * 1.3 + 1.7) +
+          0.35 * Math.sin(s * 1.57 + seed * 0.9) +
+          0.15 * Math.sin(s * 2.91 + seed * 2.1 + 0.4);
+
+        const s  = ts * 0.22 * speed + seed;
+        const sPrev = s - 0.1;
+        const xn   = xAt(s);
+        const xnP  = xAt(sPrev);
+        const yn   = Math.max(-1, Math.min(1, yAt(s)));
+        const x    = xn * xR;
+        const y    = yn * yR;
+        const flip = xn >= xnP ? 1 : -1;
+        f.setAttribute("transform", "translate(" + x.toFixed(2) + "," + y.toFixed(2) + ") scale(" + flip + ",1)");
       });
     };
     this._animId = requestAnimationFrame(tick);
@@ -659,25 +682,29 @@ class WellWaterCard extends HTMLElement {
   }
 
   // Renders 0..N small fish inside the water. Each fish is a <g class="fish">
-  // with data-dur / data-range / data-delay; the animation loop reads those
-  // and sets a translate + scaleX transform every frame, so fish swim back
-  // and forth and flip when they hit the edge.
+  // with data-seed / data-xrange / data-yrange / data-speed; the animation
+  // loop reads those and computes a smooth pseudo-random position by summing
+  // sines at different frequencies — so fish drift in both X and Y in a
+  // non-repeating, organic pattern instead of shuttling back and forth.
   _fishSvg(SX, fillY, SW, fillH) {
     const c = this._config;
     if (!c || !c.show_fish || fillH < 22) return "";
-    // Each entry: swim depth (fraction of water column), color, period in
-    // seconds for one full there-and-back cycle, phase offset in seconds.
+    // Each entry: vertical depth (fraction of water column), color, animation
+    // speed multiplier, random-looking seed. Seeds differ so the two fish
+    // never appear to be in lockstep.
     const school = [
-      { depth: 0.35, color: "#ffa726", dur: 13, delay: 0 },
-      { depth: 0.70, color: "#90a4ae", dur: 19, delay: -6 },
+      { depth: 0.35, color: "#ffa726", speed: 1.00, seed: 1.3 },
+      { depth: 0.65, color: "#90a4ae", speed: 0.75, seed: 4.7 },
     ];
-    const fishW = 7;
-    const range = Math.max(SW - fishW - 2, 0);
-    return school.map((f, i) => {
-      const y = fillY + fillH * f.depth;
-      const cx = SX + 1;
-      return "<g transform='translate(" + cx + "," + y.toFixed(2) + ")'>" +
-               "<g class='fish' data-dur='" + f.dur + "' data-range='" + range + "' data-delay='" + f.delay + "'>" +
+    const fishW = 11;
+    const xRange = Math.max(SW - fishW, 0);
+    return school.map(f => {
+      const baseY = fillY + fillH * f.depth;
+      const baseX = SX + 4;
+      // Y drift bounded so the fish can't swim through the surface or floor.
+      const yRange = Math.max(0, Math.min(8, fillH * Math.min(f.depth, 1 - f.depth) - 3));
+      return "<g transform='translate(" + baseX + "," + baseY.toFixed(2) + ")'>" +
+               "<g class='fish' data-seed='" + f.seed + "' data-xrange='" + xRange + "' data-yrange='" + yRange.toFixed(2) + "' data-speed='" + f.speed + "'>" +
                  "<ellipse cx='0' cy='0' rx='3.2' ry='1.6' fill='" + f.color + "' opacity='.92'/>" +
                  "<polygon points='3.2,0 5.8,-2 5.8,2' fill='" + f.color + "' opacity='.92'/>" +
                  "<circle cx='-1.4' cy='-.3' r='.45' fill='#fff'/>" +
