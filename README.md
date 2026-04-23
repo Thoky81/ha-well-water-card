@@ -17,7 +17,7 @@ A Home Assistant Lovelace card that visualises a water-level (or volume) sensor 
 ## Install via HACS (custom repository)
 
 1. In HACS, open the three-dot menu → **Custom repositories**.
-2. Paste your GitHub repo URL and pick category **Lovelace**. Click **Add**.
+2. Paste `https://github.com/Thoky81/ha-well-water-card` and pick type **Dashboard** (this is HACS's category for Lovelace frontend cards). Click **Add**.
 3. Find **Well Water Level Card** in HACS, click **Download**.
 4. Reload Lovelace (HACS usually adds the resource automatically). If it did not, add one manually:
    - Settings → Dashboards → Resources → **Add**
