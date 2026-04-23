@@ -1,0 +1,15 @@
+# ── Single well — light theme ─────────────────────────────────────────────────
+# Sensor reports depth in metres
+# Well position: SVG on top, readings below
+
+type: custom:well-water-card
+name: Well
+entity: sensor.well_water_level
+sensor_unit: m
+display_unit: m
+min: 0
+max: 4
+warn_low: 1.0
+theme: light
+well_style: light                      # light-coloured SVG shaft
+well_position: top                     # SVG centred above, readings full-width below

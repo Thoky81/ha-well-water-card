@@ -1,0 +1,19 @@
+# ── Single well — custom colours ─────────────────────────────────────────────
+# Full control over card shell colours.
+# theme: custom activates the four colour overrides below.
+
+type: custom:well-water-card
+name: Well
+entity: sensor.well_water_level
+sensor_unit: m
+display_unit: m
+min: 0
+max: 4
+warn_low: 1.0
+theme: custom
+card_background: "#0a1628"             # card background
+card_border: "#1e3a5f"                 # card border line colour
+text_color: "#d0e8f8"                  # body text (readings labels, meta)
+title_color: "#5ba0c8"                 # title and section heading colour
+well_style: dark
+well_position: left

@@ -1,0 +1,26 @@
+# ── Dual — two wells stacked (1 column, full width rows) ──────────────────────
+# Stacked layout shows each well as a full-width row with the large SVG,
+# identical to the single card layout but both wells in one card.
+
+type: custom:well-water-card
+layout: dual
+name: Water Tanks
+theme: ha                              # follows HA dashboard theme
+dual_arrangement: stacked
+wells:
+  - entity: sensor.well_depth
+    name: Well
+    sensor_unit: cm                    # sensor reports cm
+    display_unit: m                    # show in m (auto-converts)
+    min: 0
+    max: 4
+    warn_low: 1.0
+    entity_pump: binary_sensor.well_pump
+
+  - entity: sensor.tank_volume
+    name: Tank
+    sensor_unit: l
+    display_unit: l
+    min: 0
+    max: 2000
+    warn_low: 400

@@ -1,0 +1,8 @@
+type: custom:well-water-card
+entity: sensor.well_water_level   # your depth sensor (in meters)
+entity_pump: binary_sensor.well_pump  # optional
+min: 0          # empty = 0 m
+max: 4          # full = 4 m
+name: Well
+unit: m
+warn_low: 1.0   # turns amber below this

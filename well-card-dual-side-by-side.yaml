@@ -1,0 +1,26 @@
+# ── Dual — two wells side by side (2 columns) ─────────────────────────────────
+# Each well has independent sensor, units, and thresholds.
+
+type: custom:well-water-card
+layout: dual
+name: Water Tanks
+theme: dark
+dual_arrangement: side_by_side         # side_by_side | stacked
+wells:
+  - entity: sensor.well_depth
+    name: Well
+    sensor_unit: m
+    display_unit: m
+    min: 0
+    max: 4
+    warn_low: 1.0
+    entity_pump: binary_sensor.well_pump
+
+  - entity: sensor.tank_volume
+    name: Tank
+    sensor_unit: l
+    display_unit: l
+    min: 0
+    max: 2000
+    warn_low: 400
+    entity_pump: binary_sensor.tank_pump

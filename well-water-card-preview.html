@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Well Water Card — Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #060e18;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 32px 16px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .demo-label {
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #1e3a55;
+    }
+    .cards-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .card-wrap {
+      width: 320px;
+    }
+    .card {
+      background: #0d1b2a;
+      border-radius: 16px;
+      padding: 20px 24px 24px;
+      color: #c8d8e8;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid #1a2d42;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(30,136,229,0.07) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 18px;
+    }
+    .title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #4a7fa5;
+    }
+    .status-badge {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+    .badge-ok { background: rgba(30,136,229,0.12); color: #1e88e5; border: 1px solid #1e88e555; }
+    .badge-warn { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid #f59e0b55; }
+    .badge-empty { background: rgba(229,57,53,0.15); color: #e53935; border: 1px solid #e5393555; }
+    .body { display: flex; align-items: flex-start; gap: 20px; }
+    .well-wrap { position: relative; flex-shrink: 0; }
+    .readings { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-top: 8px; }
+    .reading-label { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #3d6280; margin-bottom: 2px; }
+    .reading-value { font-size: 32px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+    .reading-unit { font-size: 13px; color: #3d6280; margin-left: 3px; }
+    .reading-pct { font-size: 13px; color: #4a7fa5; margin-top: 4px; margin-bottom: 16px; }
+    .divider { height: 1px; background: #1a2d42; margin: 12px 0; }
+    .meta-row { display: flex; justify-content: space-between; align-items: center; }
+    .meta-item { display: flex; flex-direction: column; gap: 2px; }
+    .meta-label { font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; color: #2d4f68; }
+    .meta-val { font-size: 11px; color: #6a9bc0; }
+    .pump-dot {
+      display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+      background: #4caf50; box-shadow: 0 0 6px rgba(76,175,80,0.7);
+      margin-right: 4px; vertical-align: middle;
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+    .bar-wrap { height: 4px; background: #0d1f30; border-radius: 2px; margin-top: 10px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 2px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+    .slider-row { display: flex; align-items: center; gap: 12px; }
+    .slider-row input { flex:1; accent-color: #1e88e5; }
+    .slider-row span { font-size: 11px; color: #4a7fa5; width: 50px; text-align: right; }
+    .controls {
+      background: #0a1520;
+      border: 1px solid #1a2d42;
+      border-radius: 12px;
+      padding: 16px 20px;
+      width: 320px;
+    }
+    .ctrl-title { font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: #2d4f68; margin-bottom: 12px; }
+    .ctrl-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+    .ctrl-label { font-size: 9px; color: #3d6280; letter-spacing: 0.1em; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+
+<div class="demo-label">Well Water Level Card — Preview</div>
+
+<div class="cards-row">
+  <!-- Card 1: Normal level -->
+  <div class="card-wrap">
+    <div class="card" id="card1">
+      <div class="header">
+        <div class="title">Studňa — Záhrada</div>
+        <div class="status-badge badge-ok" id="badge1">OK</div>
+      </div>
+      <div class="body">
+        <div class="well-wrap">
+          <canvas id="wellCanvas1" width="100" height="260"></canvas>
+        </div>
+        <div class="readings">
+          <div class="reading-label">Hladina vody</div>
+          <div class="reading-value" id="valText1" style="color:#1e88e5; text-shadow: 0 0 20px rgba(30,136,229,0.3)">
+            2.80<span class="reading-unit">m</span>
+          </div>
+          <div class="reading-pct" id="pctText1">70% kapacity</div>
+          <div class="bar-wrap"><div class="bar-fill" id="bar1" style="width:70%; background: linear-gradient(90deg, #1e88e588, #1e88e5)"></div></div>
+          <div class="divider"></div>
+          <div class="meta-row">
+            <div class="meta-item"><div class="meta-label">Min</div><div class="meta-val">0 m</div></div>
+            <div class="meta-item"><div class="meta-label">Max</div><div class="meta-val">4 m</div></div>
+            <div class="meta-item">
+              <div class="meta-label">Pumpa</div>
+              <div class="meta-val"><span class="pump-dot"></span>Beží</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Controls -->
+<div class="controls">
+  <div class="ctrl-title">Interaktívna ukážka</div>
+  <div class="ctrl-row">
+    <div class="ctrl-label">Hladina vody</div>
+    <div class="slider-row">
+      <input type="range" min="0" max="400" value="280" id="levelSlider">
+      <span id="sliderVal">2.80 m</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  const MIN = 0, MAX = 4, WARN_LOW = 1.0;
+  let waveOffset = 0;
+  let currentLevel = 2.8;
+
+  const canvas = document.getElementById('wellCanvas1');
+  const ctx = canvas.getContext('2d');
+  const slider = document.getElementById('levelSlider');
+
+  slider.addEventListener('input', () => {
+    currentLevel = parseInt(slider.value) / 100;
+    document.getElementById('sliderVal').textContent = currentLevel.toFixed(2) + ' m';
+    updateCard();
+  });
+
+  function getColors(level, pct) {
+    if (pct < 5) return { main: '#e53935', light: '#ef5350', glow: 'rgba(229,57,53,0.3)' };
+    if (level < WARN_LOW) return { main: '#f59e0b', light: '#fbbf24', glow: 'rgba(245,158,11,0.25)' };
+    return { main: '#1e88e5', light: '#42a5f5', glow: 'rgba(30,136,229,0.25)' };
+  }
+
+  function updateCard() {
+    const pct = Math.max(0, Math.min(100, ((currentLevel - MIN) / (MAX - MIN)) * 100));
+    const c = getColors(currentLevel, pct);
+
+    // Badge
+    const badge = document.getElementById('badge1');
+    badge.className = 'status-badge';
+    if (pct < 5) { badge.textContent = 'PRÁZDNA'; badge.classList.add('badge-empty'); }
+    else if (currentLevel < WARN_LOW) { badge.textContent = 'NÍZKA HLADINA'; badge.classList.add('badge-warn'); }
+    else if (pct > 80) { badge.textContent = 'PLNÁ'; badge.classList.add('badge-ok'); }
+    else { badge.textContent = 'OK'; badge.classList.add('badge-ok'); }
+    badge.style.color = c.main;
+    badge.style.borderColor = c.main + '55';
+    badge.style.background = c.glow;
+
+    const val = document.getElementById('valText1');
+    val.innerHTML = currentLevel.toFixed(2) + '<span class="reading-unit">m</span>';
+    val.style.color = c.main;
+    val.style.textShadow = `0 0 20px ${c.glow}`;
+
+    document.getElementById('pctText1').textContent = Math.round(pct) + '% kapacity';
+    const bar = document.getElementById('bar1');
+    bar.style.width = pct + '%';
+    bar.style.background = `linear-gradient(90deg, ${c.main}88, ${c.main})`;
+  }
+
+  function buildWavePath(offset, variant) {
+    const amp = variant === 0 ? 5 : 3.5;
+    const freq = variant === 0 ? 1.2 : 0.9;
+    const rad = (offset * Math.PI) / 180;
+    const pts = [];
+    for (let x = 0; x <= 48; x += 2) {
+      const y = Math.sin((x / 48) * Math.PI * 2 * freq + rad) * amp;
+      pts.push({ x, y });
+    }
+    return pts;
+  }
+
+  function drawWell() {
+    const W = 100, H = 260;
+    const shaftX = 26, shaftW = 48;
+    const shaftTop = 30, shaftH = 200;
+    const shaftBot = shaftTop + shaftH;
+
+    const pct = Math.max(0, Math.min(100, ((currentLevel - MIN) / (MAX - MIN)) * 100));
+    const fillH = (pct / 100) * shaftH;
+    const fillY = shaftBot - fillH;
+    const c = getColors(currentLevel, pct);
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Ticks
+    for (let i = 0; i <= 4; i++) {
+      const y = shaftBot - (i / 4) * shaftH;
+      const val = ((i / 4) * (MAX - MIN) + MIN).toFixed(1);
+      ctx.beginPath();
+      ctx.moveTo(16, y); ctx.lineTo(25, y);
+      ctx.strokeStyle = '#1e3a55'; ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = '#2a4f6e';
+      ctx.font = '7px JetBrains Mono, monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(val, 14, y + 3);
+    }
+
+    // Unit label (rotated)
+    ctx.save();
+    ctx.translate(7, 135);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = '#1e3a55';
+    ctx.font = '7px JetBrains Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('m', 0, 0);
+    ctx.restore();
+
+    // Shaft walls
+    const wallGrad = ctx.createLinearGradient(shaftX, 0, shaftX + shaftW, 0);
+    wallGrad.addColorStop(0, '#1a3a55');
+    wallGrad.addColorStop(0.4, '#0d1b2a');
+    wallGrad.addColorStop(1, '#162940');
+    ctx.fillStyle = wallGrad;
+    ctx.fillRect(shaftX, shaftTop, 6, shaftH);
+    ctx.fillStyle = '#162940';
+    ctx.fillRect(shaftX + shaftW - 6, shaftTop, 6, shaftH);
+
+    // Cap
+    ctx.fillStyle = '#1a2f45';
+    roundRect(ctx, 20, 22, 60, 10, 3);
+    ctx.fillStyle = '#1e3a54';
+    roundRect(ctx, 22, 20, 56, 4, 2);
+
+    // Bottom
+    ctx.fillStyle = '#0a1520';
+    roundRect(ctx, 26, 228, 48, 4, 1);
+
+    // Clip to shaft interior
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(shaftX, shaftTop, shaftW, shaftH);
+    ctx.clip();
+
+    // Water fill
+    if (fillH > 0) {
+      const waterGrad = ctx.createLinearGradient(0, fillY, 0, shaftBot);
+      waterGrad.addColorStop(0, c.light + 'e0');
+      waterGrad.addColorStop(1, c.main + 'ff');
+      ctx.fillStyle = waterGrad;
+      ctx.globalAlpha = 0.85;
+      ctx.fillRect(shaftX, fillY, shaftW, fillH + 4);
+      ctx.globalAlpha = 1;
+
+      // Wave
+      const wpts = buildWavePath(waveOffset, 0);
+      const wpts2 = buildWavePath(waveOffset + 90, 1);
+
+      ctx.save();
+      ctx.translate(shaftX, fillY - 8);
+      // Wave 1
+      ctx.beginPath();
+      ctx.moveTo(0, 12);
+      wpts.forEach(p => ctx.lineTo(p.x, 12 + p.y));
+      ctx.lineTo(48, 80); ctx.lineTo(0, 80);
+      ctx.closePath();
+      ctx.fillStyle = c.light;
+      ctx.globalAlpha = 0.35;
+      ctx.fill();
+      // Wave 2
+      ctx.beginPath();
+      ctx.moveTo(0, 12);
+      wpts2.forEach(p => ctx.lineTo(p.x, 12 + p.y));
+      ctx.lineTo(48, 80); ctx.lineTo(0, 80);
+      ctx.closePath();
+      ctx.fillStyle = c.main;
+      ctx.globalAlpha = 0.3;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+
+    ctx.restore();
+
+    // Highlight inner left edge
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    ctx.fillRect(shaftX, shaftTop, 2, shaftH);
+
+    // Level line + arrow
+    if (fillH > 0) {
+      ctx.strokeStyle = c.main;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(shaftX, fillY); ctx.lineTo(shaftX + shaftW, fillY);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // Arrow
+      ctx.fillStyle = c.main;
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(78, fillY);
+      ctx.lineTo(84, fillY - 4);
+      ctx.lineTo(84, fillY + 4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Level text
+      if (fillH > 20) {
+        ctx.fillStyle = c.main;
+        ctx.font = '8px JetBrains Mono, monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(currentLevel.toFixed(1), 88, fillY + 4);
+      }
+    }
+
+    // Pipe at top
+    ctx.fillStyle = '#1a2f45';
+    roundRect(ctx, 42, 8, 16, 15, 2);
+    ctx.fillStyle = '#1e3a54';
+    roundRect(ctx, 44, 6, 12, 4, 1);
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function loop() {
+    waveOffset = (waveOffset + 0.5) % 360;
+    drawWell();
+    requestAnimationFrame(loop);
+  }
+
+  updateCard();
+  loop();
+</script>
+</body>
+</html>

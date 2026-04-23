@@ -1,0 +1,15 @@
+# ── Single well — dark theme (default) ────────────────────────────────────────
+# Sensor reports depth in centimetres, card shows metres
+# Well position: SVG left, readings right
+
+type: custom:well-water-card
+name: Well
+entity: sensor.well_water_level
+entity_pump: binary_sensor.well_pump   # remove if no pump sensor
+sensor_unit: cm                        # what the sensor actually reports
+display_unit: m                        # what the card shows (auto-converts)
+min: 0                                 # empty = 0 m
+max: 4                                 # full  = 4 m
+warn_low: 1.0                          # turns amber below 1.0 m
+theme: dark
+well_position: left                    # left | right | top | bottom

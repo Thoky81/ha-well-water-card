@@ -1,0 +1,15 @@
+# ── Single water tank — volume sensor ─────────────────────────────────────────
+# For a tank that reports volume in litres.
+# Display in litres; warn below 400 l.
+
+type: custom:well-water-card
+name: Tank
+entity: sensor.tank_volume
+entity_pump: binary_sensor.tank_pump
+sensor_unit: l                         # sensor reports litres
+display_unit: l                        # show in litres
+min: 0
+max: 2000                              # tank capacity in litres
+warn_low: 400                          # amber warning below 400 l
+theme: dark
+well_position: left

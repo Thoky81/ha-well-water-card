@@ -1,0 +1,13 @@
+# ── Single water tank — litres sensor, display in m³ ─────────────────────────
+# Sensor reports in litres; card converts and shows m³.
+
+type: custom:well-water-card
+name: Tank
+entity: sensor.tank_volume
+sensor_unit: l                         # sensor: litres
+display_unit: m3                       # display: cubic metres (YAML key is m3, not m³)
+min: 0                                 # in m³
+max: 2.0                               # 2000 l = 2.0 m³
+warn_low: 0.4                          # 400 l = 0.4 m³
+theme: ha
+well_position: left

@@ -1,0 +1,24 @@
+# ── Dual — light theme, stacked ───────────────────────────────────────────────
+
+type: custom:well-water-card
+layout: dual
+name: Water Tanks
+theme: light
+well_style: light
+dual_arrangement: stacked
+wells:
+  - entity: sensor.well_depth
+    name: Well
+    sensor_unit: m
+    display_unit: m
+    min: 0
+    max: 4
+    warn_low: 1.0
+
+  - entity: sensor.rain_tank
+    name: Rain Tank
+    sensor_unit: l
+    display_unit: l
+    min: 0
+    max: 1000
+    warn_low: 150

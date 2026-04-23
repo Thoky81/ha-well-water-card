@@ -1,0 +1,16 @@
+# ── Single well — follows HA dashboard theme ──────────────────────────────────
+# Recommended: transparent card that adapts to whatever HA theme you use.
+# Works with both light and dark HA themes automatically.
+
+type: custom:well-water-card
+name: Well
+entity: sensor.well_water_level
+entity_pump: binary_sensor.well_pump
+sensor_unit: m
+display_unit: m
+min: 0
+max: 4
+warn_low: 1.0
+theme: ha                              # uses --card-background-color, --primary-text-color, etc.
+well_style: dark                       # keep dark shaft regardless of card theme
+well_position: left
