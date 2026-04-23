@@ -29,7 +29,7 @@ A Home Assistant Lovelace card that visualises a water-level (or volume) sensor 
 
 1. Copy `well-water-card.js` to `/config/www/`.
 2. Add the resource in Settings → Dashboards → Resources:
-   - URL: `/local/well-water-card.js?v=7`
+   - URL: `/local/well-water-card.js?v=8`
    - Type: **JavaScript module**
 3. Hard-refresh the browser. Bump the `?v=` number whenever you update the file.
 
@@ -84,7 +84,7 @@ wells:
 | `entity` | string | — | Water-level sensor entity (required in single mode). |
 | `entity_pump` | string | — | Optional `binary_sensor` for the pump. |
 | `name` | string | `Well` | Card title. |
-| `sensor_unit` | `m`\|`cm`\|`mm`\|`m3`\|`l` | `m` | Unit the sensor reports. |
+| `sensor_unit` | `m`\|`cm`\|`mm`\|`m3`\|`l` | auto-detected from the entity's `unit_of_measurement`, falling back to `m` | Unit the sensor reports. Usually you don't need to set this — the visual editor auto-fills it when you pick the entity, and the card reads it from the entity at runtime if omitted. |
 | `display_unit` | same set | = `sensor_unit` | Unit to display. Auto-converts. |
 | `min` / `max` | number | `0` / `4` (depth) or `1000` (volume) | Range in `display_unit`. |
 | `warn_low` | number | — | Amber warning threshold in `display_unit`. |

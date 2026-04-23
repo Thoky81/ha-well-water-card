@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v7
+ * Well Water Level Card  — v8
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=7   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=8   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -95,6 +95,20 @@ function uIsVol(k) {
 function uCompat(k) {
   const type = UNITS[k] && UNITS[k].type;
   return type ? UNIT_KEYS.filter(x => UNITS[x].type === type) : UNIT_KEYS;
+}
+
+// Map a HA entity's unit_of_measurement attribute to one of our internal keys.
+// Returns null for units we don't support (e.g. "%", "gal"), so callers can
+// fall back to "m" or surface a hint.
+function uFromHA(s) {
+  if (!s) return null;
+  const n = String(s).trim().toLowerCase();
+  if (n === "m")  return "m";
+  if (n === "cm") return "cm";
+  if (n === "mm") return "mm";
+  if (n === "m³" || n === "m3") return "m3";
+  if (n === "l" || n === "liter" || n === "liters" || n === "litre" || n === "litres") return "l";
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -309,7 +323,13 @@ class WellWaterCard extends HTMLElement {
   }
 
   _resolve(wcfg) {
-    const su  = wcfg.sensor_unit  || "m";
+    // sensor_unit precedence: explicit config > entity's unit_of_measurement > "m"
+    let su = wcfg.sensor_unit;
+    if (!su && this._hass && wcfg.entity) {
+      const st = this._hass.states[wcfg.entity];
+      if (st) su = uFromHA(st.attributes && st.attributes.unit_of_measurement);
+    }
+    su = su || "m";
     const du  = wcfg.display_unit || su;
     const min = wcfg.min  != null ? +wcfg.min  : 0;
     const max = wcfg.max  != null ? +wcfg.max  : (uIsVol(du) ? 1000 : 4);
@@ -1063,9 +1083,13 @@ class WellWaterCardEditor extends HTMLElement {
       picker.addEventListener("value-changed", ev => {
         const val = ev.detail.value || "";
         if (wellMatch) {
-          this._setWell(+wellMatch[1], wellMatch[2], val);
+          const wIdx = +wellMatch[1];
+          const wField = wellMatch[2];
+          this._setWell(wIdx, wField, val);
+          if (wField === "entity") this._autoUnit(val, wIdx);
         } else {
           this._set(field, val);
+          if (field === "entity") this._autoUnit(val, null);
         }
       });
     });
@@ -1123,6 +1147,20 @@ class WellWaterCardEditor extends HTMLElement {
   }
 
   // ── Config mutation helpers ──────────────────────────────────────────────────
+
+  // Called right after an entity is picked. Reads the entity's
+  // unit_of_measurement attribute and — if it maps to one of our supported
+  // units — writes it into sensor_unit (top-level or per-well), overwriting
+  // any stale default. The subsequent _build repaints the unit dropdowns.
+  _autoUnit(entityId, wellIdx) {
+    if (!entityId || !this._hass) return;
+    const st = this._hass.states[entityId];
+    if (!st) return;
+    const detected = uFromHA(st.attributes && st.attributes.unit_of_measurement);
+    if (!detected) return;
+    if (wellIdx != null) this._setWell(wellIdx, "sensor_unit", detected);
+    else                 this._set("sensor_unit", detected);
+  }
 
   _set(field, val) {
     const upd = Object.assign({}, this._config);
