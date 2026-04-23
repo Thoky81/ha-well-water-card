@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v8
+ * Well Water Level Card  — v9
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=8   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=9   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -28,6 +28,9 @@
  *   theme: dark             # dark | light | ha | custom
  *   well_style: dark        # dark | light  (SVG shaft look, default = follows theme)
  *   well_position: left     # left | right | top | bottom
+ *   font_size: normal       # small | normal | large
+ *   show_title: true        # false hides the card title
+ *   color: "#1e88e5"        # water tint for the "ok" state (warn/empty/full still win)
  *   # custom theme colors (only when theme: custom):
  *   card_background: "#0d1b2a"
  *   card_border: "#1a2d42"
@@ -41,6 +44,8 @@
  *   theme: ha
  *   well_style: dark
  *   dual_arrangement: side_by_side   # side_by_side | stacked
+ *   font_size: normal                # small | normal | large
+ *   show_title: true                 # false hides the card title
  *   wells:
  *     - entity: sensor.well_1
  *       name: Well
@@ -50,6 +55,7 @@
  *       max: 4
  *       warn_low: 1.0
  *       entity_pump: binary_sensor.pump_1
+ *       color: "#1e88e5"             # per-well water tint for "ok" state
  *     - entity: sensor.tank_1
  *       name: Tank
  *       sensor_unit: l
@@ -57,6 +63,7 @@
  *       min: 0
  *       max: 2000
  *       warn_low: 400
+ *       color: "#26a69a"
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,6 +128,25 @@ const WATER_PAL = {
   low:  { main: "#e53935", light: "#ef5350", glow: "rgba(229,57,53,0.32)"   },
   full: { main: "#26a69a", light: "#4db6ac", glow: "rgba(38,166,154,0.30)"  },
 };
+
+// Derive a {main, light, glow} palette from a user-picked hex color so the
+// custom "ok"-state color has the same lighter-highlight and soft-glow look
+// as the built-in palettes. Invalid hex → null (caller falls back to WATER_PAL.ok).
+function palFromMain(hex) {
+  if (!hex) return null;
+  const m = /^#([0-9a-f]{6})$/i.exec(String(hex).trim());
+  if (!m) return null;
+  const r = parseInt(m[1].slice(0, 2), 16);
+  const g = parseInt(m[1].slice(2, 4), 16);
+  const b = parseInt(m[1].slice(4, 6), 16);
+  const lighten = c => Math.min(255, Math.round(c + (255 - c) * 0.28));
+  const toHex   = v => v.toString(16).padStart(2, "0");
+  return {
+    main:  "#" + toHex(r) + toHex(g) + toHex(b),
+    light: "#" + toHex(lighten(r)) + toHex(lighten(g)) + toHex(lighten(b)),
+    glow:  "rgba(" + r + "," + g + "," + b + ",0.30)",
+  };
+}
 
 // Card theme definitions
 const CARD_THEMES = {
@@ -202,6 +228,7 @@ function defaultWell(n) {
     min:          0,
     max:          4,
     warn_low:     null,
+    color:        null,
   };
 }
 
@@ -236,6 +263,8 @@ class WellWaterCard extends HTMLElement {
         theme:            config.theme           || "dark",
         well_style:       config.well_style      || null,
         dual_arrangement: config.dual_arrangement || "side_by_side",
+        font_size:        config.font_size       || "normal",
+        show_title:       config.show_title !== false,
         card_background:  config.card_background  || null,
         card_border:      config.card_border      || null,
         text_color:       config.text_color       || null,
@@ -256,9 +285,12 @@ class WellWaterCard extends HTMLElement {
         min:             0,
         max:             uIsVol(du) ? 1000 : 4,
         warn_low:        null,
+        color:           null,
         theme:           "dark",
         well_style:      null,
         well_position:   "left",
+        font_size:       "normal",
+        show_title:      true,
         card_background: null,
         card_border:     null,
         text_color:      null,
@@ -309,6 +341,11 @@ class WellWaterCard extends HTMLElement {
     return d + " L" + W + ",80 L0,80 Z";
   }
 
+  _fontScale() {
+    const s = this._config && this._config.font_size;
+    return s === "small" ? 0.85 : s === "large" ? 1.2 : 1.0;
+  }
+
   _getTheme() {
     const c = this._config;
     const base = CARD_THEMES[c.theme] || CARD_THEMES.dark;
@@ -354,7 +391,11 @@ class WellWaterCard extends HTMLElement {
     const isEmpty = level !== null && pct < 5;
     const isWarn  = warn !== null  && level !== null && level < warn;
     const isFull  = level !== null && pct > 90;
-    const pal     = isEmpty ? WATER_PAL.low : isWarn ? WATER_PAL.warn : isFull ? WATER_PAL.full : WATER_PAL.ok;
+    // Status colors (warn/empty/full) still win over a user-picked color, so the
+    // alert at-a-glance behavior is preserved. Custom `color` only tints the
+    // default "ok" state.
+    const okPal   = palFromMain(wcfg.color) || WATER_PAL.ok;
+    const pal     = isEmpty ? WATER_PAL.low : isWarn ? WATER_PAL.warn : isFull ? WATER_PAL.full : okPal;
 
     return {
       level, pct, min, max, pumpOn,
@@ -522,8 +563,9 @@ class WellWaterCard extends HTMLElement {
   _readings(d, t, compact) {
     const { level, pct, unit, col, glow, pumpOn, lbl } = d;
     const ul   = uLabel(unit);
-    const fsBig  = compact ? "22px" : "32px";
-    const fsSmall = compact ? "11px" : "13px";
+    const scale = this._fontScale();
+    const fsBig   = Math.round((compact ? 22 : 32) * scale) + "px";
+    const fsSmall = Math.round((compact ? 11 : 13) * scale) + "px";
 
     const pumpHtml = pumpOn !== null
       ? "<div class='mi'><div class='ml'>Pump</div><div class='mv'>" +
@@ -604,43 +646,57 @@ class WellWaterCard extends HTMLElement {
   }
 
   _renderSingle() {
+    const c   = this._config;
     const t   = this._getTheme();
-    const d   = this._resolve(this._config);
-    const pos = this._config.well_position || "left";
+    const d   = this._resolve(c);
+    const pos = c.well_position || "left";
+    const showTitle = c.show_title !== false;
 
     const { col, status, name, unit, suUnit } = d;
+    const scale = this._fontScale();
+    const titleFs = Math.round(11 * scale);
+    const badgeFs = Math.round(9 * scale);
+
     const suBadge = suUnit !== unit
-      ? "<span style='font-size:9px;color:" + t.textMuted + ";margin-left:6px;'>sensor: " + uLabel(suUnit) + "</span>"
+      ? "<span style='font-size:" + Math.round(9 * scale) + "px;color:" + t.textMuted + ";margin-left:6px;'>sensor: " + uLabel(suUnit) + "</span>"
       : "";
 
     const isVertical = pos === "top" || pos === "bottom";
     const isReverse  = pos === "right" || pos === "bottom";
 
     const svgBlock =
-      "<div style='flex-shrink:0;" + (isVertical ? "display:flex;justify-content:center;" : "") + "'>" +
+      "<div class='svg-wrap' style='flex-shrink:0;" + (isVertical ? "display:flex;justify-content:center;" : "") + "'>" +
       this._svgLarge(d, t.shaft) +
       "</div>";
 
     const readBlock =
-      "<div style='flex:1;" + (isVertical ? "" : "padding-top:8px;") + "'>" +
+      "<div style='flex:1;min-width:0;" + (isVertical ? "" : "padding-top:8px;") + "'>" +
       this._readings(d, t, false) +
       "</div>";
 
     const bodyContent = isReverse ? readBlock + svgBlock : svgBlock + readBlock;
 
+    // Header: optionally show the title; the status badge always renders.
+    // When the title is hidden, the badge floats right on its own row.
+    const header =
+      "<div class='hdr'>" +
+        (showTitle ? "<div class='htitle'>" + name + suBadge + "</div>" : "<div></div>") +
+        "<div class='badge'>" + status + "</div>" +
+      "</div>";
+
     this.shadowRoot.innerHTML =
       "<style>" + this._css(t) +
-      ".card{padding:20px 24px 24px;}" +
-      ".hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;}" +
-      ".htitle{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:" + t.titleColor + ";}" +
-      ".badge{font-size:9px;font-weight:700;letter-spacing:.15em;padding:3px 8px;border-radius:4px;color:" + col + ";border:1px solid " + col + "44;background:" + this._badgeBg(d) + ";}" +
+      ".card{padding:20px 24px 24px;container-type:inline-size;}" +
+      ".hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:" + (showTitle ? 18 : 10) + "px;}" +
+      ".htitle{font-size:" + titleFs + "px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:" + t.titleColor + ";}" +
+      ".badge{font-size:" + badgeFs + "px;font-weight:700;letter-spacing:.15em;padding:3px 8px;border-radius:4px;color:" + col + ";border:1px solid " + col + "44;background:" + this._badgeBg(d) + ";}" +
       ".body{display:flex;flex-direction:" + (isVertical ? "column" : "row") + ";align-items:" + (isVertical ? "stretch" : "flex-start") + ";gap:" + (isVertical ? "14px" : "20px") + ";}" +
+      // On narrow cards (e.g. phone sidebar, dense grid), collapse side-by-side
+      // layouts to stacked so the SVG isn't squeezed into unreadable proportions.
+      "@container (max-width: 320px){.body{flex-direction:column !important;align-items:stretch !important;gap:14px !important;}.svg-wrap{display:flex;justify-content:center;}}" +
       "</style>" +
       "<ha-card><div class='card'>" +
-        "<div class='hdr'>" +
-          "<div class='htitle'>" + name + suBadge + "</div>" +
-          "<div class='badge'>" + status + "</div>" +
-        "</div>" +
+        header +
         "<div class='body'>" + bodyContent + "</div>" +
       "</div></ha-card>";
   }
@@ -651,6 +707,11 @@ class WellWaterCard extends HTMLElement {
     const d0      = this._resolve(c.wells[0]);
     const d1      = this._resolve(c.wells[1]);
     const stacked = c.dual_arrangement === "stacked";
+    const showTitle = c.show_title !== false;
+    const scale = this._fontScale();
+
+    const wellTitleFs = Math.round(10 * scale);
+    const wellBadgeFs = Math.round(8 * scale);
 
     const wellHtml = (d, idx) => {
       const { col, status, name } = d;
@@ -660,7 +721,7 @@ class WellWaterCard extends HTMLElement {
       const inner = stacked
         ? "<div style='display:flex;align-items:flex-start;gap:16px;'>" +
             "<div style='flex-shrink:0;'>" + this._svgLarge(d, t.shaft) + "</div>" +
-            "<div style='flex:1;padding-top:8px;'>" + this._readings(d, t, false) + "</div>" +
+            "<div style='flex:1;min-width:0;padding-top:8px;'>" + this._readings(d, t, false) + "</div>" +
           "</div>"
         : "<div style='display:flex;justify-content:center;'>" + this._svgSmall(d, idx, t.shaft) + "</div>" +
           "<div style='padding-top:8px;'>" + this._readings(d, t, true) + "</div>";
@@ -673,8 +734,8 @@ class WellWaterCard extends HTMLElement {
       return (
         "<div style='" + topBorder + "'>" +
           "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;'>" +
-            "<div style='font-size:10px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:" + t.titleColor + ";'>" + name + "</div>" +
-            "<div style='font-size:8px;font-weight:700;letter-spacing:.1em;padding:2px 7px;border-radius:3px;color:" + col + ";border:1px solid " + col + "44;background:" + this._badgeBg(d) + ";'>" + status + "</div>" +
+            "<div style='font-size:" + wellTitleFs + "px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:" + t.titleColor + ";'>" + name + "</div>" +
+            "<div style='font-size:" + wellBadgeFs + "px;font-weight:700;letter-spacing:.1em;padding:2px 7px;border-radius:3px;color:" + col + ";border:1px solid " + col + "44;background:" + this._badgeBg(d) + ";'>" + status + "</div>" +
           "</div>" +
           inner +
         "</div>"
@@ -682,27 +743,28 @@ class WellWaterCard extends HTMLElement {
     };
 
     // Side-by-side: two equal columns; stacked: single column
-    const gridStyle = stacked
-      ? "display:flex;flex-direction:column;"
-      : "display:grid;grid-template-columns:1fr 1fr;gap:0;";
-
-    // Side-by-side column divider via CSS on first column
-    const col0Style = stacked ? "" : "border-right:1px solid " + t.divider + ";padding-right:14px;";
-    const col1Style = stacked ? "" : "padding-left:14px;";
+    const gridClass = stacked ? "grid stacked" : "grid sbs";
 
     this.shadowRoot.innerHTML =
       "<style>" + this._css(t) +
-      ".card{padding:16px 18px 20px;}" +
+      ".card{padding:16px 18px 20px;container-type:inline-size;}" +
       ".chdr{display:flex;align-items:center;margin-bottom:14px;}" +
-      ".ctitle{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:" + t.titleColor + ";}" +
+      ".ctitle{font-size:" + Math.round(11 * scale) + "px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:" + t.titleColor + ";}" +
       ".bar-w{height:3px;}" +
-      ".ml{font-size:7px;} .mv{font-size:10px;}" +
+      ".ml{font-size:" + Math.round(7 * scale) + "px;} .mv{font-size:" + Math.round(10 * scale) + "px;}" +
+      ".grid.sbs{display:grid;grid-template-columns:1fr 1fr;gap:0;}" +
+      ".grid.stacked{display:flex;flex-direction:column;}" +
+      ".grid.sbs .col0{border-right:1px solid " + t.divider + ";padding-right:14px;}" +
+      ".grid.sbs .col1{padding-left:14px;}" +
+      // Collapse side-by-side to stacked on narrow cards so neither well
+      // gets crushed. Drop the column divider and horizontal padding too.
+      "@container (max-width: 360px){.grid.sbs{display:flex;flex-direction:column;}.grid.sbs .col0,.grid.sbs .col1{border:none;padding:0;}.grid.sbs .col1{border-top:1px solid " + t.divider + ";padding-top:14px;margin-top:14px;}}" +
       "</style>" +
       "<ha-card><div class='card'>" +
-        "<div class='chdr'><div class='ctitle'>" + c.name + "</div></div>" +
-        "<div style='" + gridStyle + "'>" +
-          "<div style='" + col0Style + "'>" + wellHtml(d0, 0) + "</div>" +
-          "<div style='" + col1Style + "'>" + wellHtml(d1, 1) + "</div>" +
+        (showTitle ? "<div class='chdr'><div class='ctitle'>" + c.name + "</div></div>" : "") +
+        "<div class='" + gridClass + "'>" +
+          "<div class='col0'>" + wellHtml(d0, 0) + "</div>" +
+          "<div class='col1'>" + wellHtml(d1, 1) + "</div>" +
         "</div>" +
       "</div></ha-card>";
   }
@@ -860,6 +922,9 @@ class WellWaterCardEditor extends HTMLElement {
             <input id="${p}max" type="number" step="${wstep}" placeholder="${wvol?"1000":"4"}"></label>
           <label><span>Warning (${uLabel(wdu)})</span>
             <input id="${p}warn_low" type="number" step="${wstep}" placeholder="${wvol?"200":"1.0"}"></label>
+          <label class="full"><span>Water color (OK state)</span><div class="crow">
+            <input id="${p}color" type="text" placeholder="default blue">
+            <input type="color" data-for="${p}color"></div></label>
         </div>`;
     };
 
@@ -907,6 +972,9 @@ class WellWaterCardEditor extends HTMLElement {
         .crow { display: flex; gap: 8px; align-items: center; }
         .crow input[type=text] { flex: 1; }
         .crow input[type=color] { width: 38px; height: 38px; border-radius: 5px; border: 1px solid var(--divider-color); padding: 2px; cursor: pointer; background: none; flex-shrink: 0; }
+        label.cb { flex-direction: row; align-items: center; gap: 8px; cursor: pointer; }
+        label.cb input[type=checkbox] { width: 16px; height: 16px; margin: 0; cursor: pointer; }
+        label.cb span { font-size: 12px; font-weight: 600; color: var(--primary-text-color); }
       </style>
 
       <div class="ed">
@@ -951,6 +1019,19 @@ class WellWaterCardEditor extends HTMLElement {
             ${opt("dark",  "Dark well")}
             ${opt("light", "Light well")}
           </select></label>
+        <label><span>Font size</span>
+          <select id="font_size">
+            ${opt("small",  "Small")}
+            ${opt("normal", "Normal (default)")}
+            ${opt("large",  "Large")}
+          </select></label>
+        <label class="cb full"><input id="show_title" type="checkbox"><span>Show card title</span></label>
+
+        ${layout === "single" ? `
+          <label class="full"><span>Water color (OK state)</span><div class="crow">
+            <input id="color" type="text" placeholder="default blue (auto)">
+            <input type="color" data-for="color"></div></label>
+        ` : ""}
 
         ${isCustom ? `
           <div class="sec" style="border-top:none;padding-top:0;margin-top:-4px;opacity:.7;font-size:9px;">CUSTOM COLORS</div>
@@ -1017,6 +1098,15 @@ class WellWaterCardEditor extends HTMLElement {
       const el = this.shadowRoot.getElementById(id);
       if (el) el.value = (val != null ? String(val) : "");
     };
+    const cb = (id, val) => {
+      const el = this.shadowRoot.getElementById(id);
+      if (el) el.checked = val !== false;
+    };
+    // Sync the native colour-wheel next to a hex text input.
+    const syncWheel = (f, hex) => {
+      const p = this.shadowRoot.querySelector(`input[type=color][data-for="${f}"]`);
+      if (p && hex && /^#[0-9a-fA-F]{6}$/.test(hex)) p.value = hex;
+    };
 
     sv("layout",           c.layout           || "single");
     sv("name",             c.name             || "");
@@ -1024,6 +1114,8 @@ class WellWaterCardEditor extends HTMLElement {
     sv("well_style",       c.well_style       || "");
     sv("well_position",    c.well_position    || "left");
     sv("dual_arrangement", c.dual_arrangement || "side_by_side");
+    sv("font_size",        c.font_size        || "normal");
+    cb("show_title",       c.show_title);
 
     if (layout !== "dual") {
       sv("sensor_unit",  c.sensor_unit  || "m");
@@ -1031,16 +1123,13 @@ class WellWaterCardEditor extends HTMLElement {
       sv("min",      c.min      != null ? c.min      : "");
       sv("max",      c.max      != null ? c.max      : "");
       sv("warn_low", c.warn_low != null ? c.warn_low : "");
+      sv("color",           c.color           || "");
       sv("card_background", c.card_background || "");
       sv("card_border",     c.card_border     || "");
       sv("text_color",      c.text_color      || "");
       sv("title_color",     c.title_color     || "");
-      // Sync colour wheels with text hex values
-      ["card_background","card_border","text_color","title_color"].forEach(f => {
-        const hex = c[f];
-        const picker = this.shadowRoot.querySelector(`input[type=color][data-for="${f}"]`);
-        if (picker && hex && /^#[0-9a-fA-F]{6}$/.test(hex)) picker.value = hex;
-      });
+      ["color","card_background","card_border","text_color","title_color"]
+        .forEach(f => syncWheel(f, c[f]));
     } else {
       [0, 1].forEach(idx => {
         const w = (c.wells || [])[idx] || {};
@@ -1051,6 +1140,8 @@ class WellWaterCardEditor extends HTMLElement {
         sv(p + "min",      w.min      != null ? w.min      : "");
         sv(p + "max",      w.max      != null ? w.max      : "");
         sv(p + "warn_low", w.warn_low != null ? w.warn_low : "");
+        sv(p + "color",    w.color    || "");
+        syncWheel(p + "color", w.color);
       });
     }
   }
@@ -1124,23 +1215,34 @@ class WellWaterCardEditor extends HTMLElement {
     }
 
     // All other top-level fields
-    ["name","theme","well_style","well_position","dual_arrangement",
-     "sensor_unit","display_unit","min","max","warn_low",
+    ["name","theme","well_style","well_position","dual_arrangement","font_size",
+     "sensor_unit","display_unit","min","max","warn_low","color",
      "card_background","card_border","text_color","title_color"
     ].forEach(f => onchange(f, f, null));
 
-    // Colour wheel → sync text input
+    // Show-title checkbox — different event + .checked instead of .value
+    const showTitleEl = this.shadowRoot.getElementById("show_title");
+    if (showTitleEl) {
+      showTitleEl.addEventListener("change", () => this._set("show_title", showTitleEl.checked));
+    }
+
+    // Colour wheel → sync text input. Also routes per-well colour wheels
+    // (data-for="w0_color" / "w1_color") to _setWell.
     this.shadowRoot.querySelectorAll("input[type=color][data-for]").forEach(wheel => {
       wheel.addEventListener("input", () => {
-        const tx = this.shadowRoot.getElementById(wheel.dataset.for);
-        if (tx) { tx.value = wheel.value; this._set(wheel.dataset.for, wheel.value); }
+        const f = wheel.dataset.for;
+        const tx = this.shadowRoot.getElementById(f);
+        if (tx) tx.value = wheel.value;
+        const m = f.match(/^w(\d)_(.+)$/);
+        if (m) this._setWell(+m[1], m[2], wheel.value);
+        else this._set(f, wheel.value);
       });
     });
 
     // Per-well selects / inputs (dual mode)
     [0, 1].forEach(idx => {
       const p = "w" + idx + "_";
-      ["name","sensor_unit","display_unit","min","max","warn_low"].forEach(f => {
+      ["name","sensor_unit","display_unit","min","max","warn_low","color"].forEach(f => {
         onchange(p + f, f, idx);
       });
     });

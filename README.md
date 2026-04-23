@@ -12,6 +12,10 @@ A Home Assistant Lovelace card that visualises a water-level (or volume) sensor 
 - **Unit conversion**: sensor reports in any depth/volume unit, card displays in any compatible unit.
 - **Warning threshold** with amber styling below a configurable level.
 - **Optional pump entity** — shows a pulsing indicator when running.
+- **Custom water color** per well (overrides the default blue for the "ok" state).
+- **Font size** presets (small / normal / large).
+- **Hideable card title**.
+- **Responsive**: side-by-side layouts collapse to stacked on narrow cards.
 - **Visual editor** with entity pickers, live preview, and color wheels.
 
 ## Install via HACS (custom repository)
@@ -29,7 +33,7 @@ A Home Assistant Lovelace card that visualises a water-level (or volume) sensor 
 
 1. Copy `well-water-card.js` to `/config/www/`.
 2. Add the resource in Settings → Dashboards → Resources:
-   - URL: `/local/well-water-card.js?v=8`
+   - URL: `/local/well-water-card.js?v=9`
    - Type: **JavaScript module**
 3. Hard-refresh the browser. Bump the `?v=` number whenever you update the file.
 
@@ -88,6 +92,9 @@ wells:
 | `display_unit` | same set | = `sensor_unit` | Unit to display. Auto-converts. |
 | `min` / `max` | number | `0` / `4` (depth) or `1000` (volume) | Range in `display_unit`. |
 | `warn_low` | number | — | Amber warning threshold in `display_unit`. |
+| `color` | hex string | — | Water tint for the "ok" state (warn/empty/full still override). Per-well in dual mode. |
+| `font_size` | `small`\|`normal`\|`large` | `normal` | Scales the readings text proportionally. |
+| `show_title` | boolean | `true` | Set `false` to hide the card title. |
 | `theme` | `dark`\|`light`\|`ha`\|`custom` | `dark` | Card theme. |
 | `well_style` | `dark`\|`light` | follows theme | SVG shaft look. |
 | `well_position` | `left`\|`right`\|`top`\|`bottom` | `left` | Layout of SVG vs readings (single only). |
