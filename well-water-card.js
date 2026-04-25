@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v25
+ * Well Water Level Card  — v26
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=25   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=26   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -351,8 +351,20 @@ class WellWaterCard extends HTMLElement {
     if (!newHass || !this._config) return false;
     const ids = this._trackedEntities();
     if (ids.length === 0) return true;          // placeholder path
+    // Compare state VALUES, not object references. HA replaces the state
+    // object on every entity report even when the value is identical (the
+    // last_updated/last_reported timestamps change), so a strict-equality
+    // check on the object would re-render every report — which on mobile
+    // could happen many times per minute and triggers the scroll-jump.
     for (const e of ids) {
-      if ((oldHass.states || {})[e] !== (newHass.states || {})[e]) return true;
+      const o = (oldHass.states || {})[e];
+      const n = (newHass.states || {})[e];
+      if (!o && !n) continue;
+      if (!o || !n) return true;
+      if (o.state !== n.state) return true;
+      const oUnit = o.attributes && o.attributes.unit_of_measurement;
+      const nUnit = n.attributes && n.attributes.unit_of_measurement;
+      if (oUnit !== nUnit) return true;
     }
     return false;
   }
@@ -1504,12 +1516,20 @@ class WellWaterCard extends HTMLElement {
   _css(t) {
     const ff = this._fontFamily();
     return (
-      // height:100% on host + ha-card makes the card fill its grid cell in
-      // the Sections view when HA assigns a specific row count. Default
-      // dashboards aren't affected because the parent has no forced height.
-      ":host { display: block; height: 100%; font-family: " + ff + "; }" +
+      // No height:100% on :host — on mobile, dynamic viewport changes
+      // (address-bar show/hide) propagated through the height chain and
+      // triggered reflows that the browser's scroll-restoration logic
+      // mishandled, kicking the dashboard back to the top. ha-card keeps
+      // height:100% so it still fills a Sections-grid cell when HA gives
+      // it a fixed row span; that direction works because the parent has
+      // a real height.
+      ":host { display: block; font-family: " + ff + "; }" +
       "ha-card { display: block; height: 100%; }" +
-      ".card { background: " + t.cardBg + "; border: " + t.cardBorder + "; border-radius: 16px; color: " + t.textBody + "; position: relative; overflow: hidden; box-sizing: border-box; }" +
+      // contain: paint isolates this card's repaints from the document
+      // scroll; overflow-anchor:none opts the card out of being chosen
+      // as a scroll anchor (the browser was picking it, then losing
+      // anchor state on innerHTML replacement, then snapping to top).
+      ".card { background: " + t.cardBg + "; border: " + t.cardBorder + "; border-radius: 16px; color: " + t.textBody + "; position: relative; overflow: hidden; box-sizing: border-box; contain: layout paint; overflow-anchor: none; }" +
       ".card::before { content: ''; position: absolute; inset: 0; background: " + t.glow + "; pointer-events: none; }" +
       ".divider { height: 1px; background: " + t.divider + "; margin: 11px 0; }" +
       ".bar-w { height: 4px; background: " + t.barBg + "; border-radius: 2px; overflow: hidden; }" +
