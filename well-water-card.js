@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v33
+ * Well Water Level Card  — v34
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=33   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=34   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -1914,6 +1914,33 @@ class WellWaterCardEditor extends HTMLElement {
     this._config = {};
     this._hass   = null;
     this._built  = false;
+  }
+
+  connectedCallback() {
+    // Force HA to load ha-entity-picker (and friends). It's lazy-loaded
+    // and may not be registered yet when the editor opens — until it's
+    // registered, the <ha-entity-picker> tags render as empty inert
+    // placeholders, which looked like the entity fields had vanished.
+    this._ensureHelpers();
+  }
+
+  async _ensureHelpers() {
+    if (customElements.get("ha-entity-picker")) return;
+    if (typeof window.loadCardHelpers !== "function") return;
+    try {
+      const helpers = await window.loadCardHelpers();
+      // Touching createCardElement on an entities card forces ha-entity-picker
+      // and the rest of the form components to be imported.
+      if (helpers && helpers.createCardElement) {
+        const tmp = await helpers.createCardElement({ type: "entities", entities: [] });
+        if (tmp && tmp.constructor && tmp.constructor.getConfigElement) {
+          tmp.constructor.getConfigElement();
+        }
+      }
+    } catch (e) { /* best-effort — fall through */ }
+    // If we already rendered before the picker was registered, rebuild now
+    // that it's available so the empty placeholders get upgraded.
+    if (this._built) this._build();
   }
 
   // ── HA lifecycle ────────────────────────────────────────────────────────────
