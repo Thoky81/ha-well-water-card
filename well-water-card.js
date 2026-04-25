@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v29
+ * Well Water Level Card  — v30
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=29   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=30   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -288,6 +288,9 @@ class WellWaterCard extends HTMLElement {
         history_hours:    +config.history_hours || 24,
         font_family:      config.font_family    || null,
         card_height:      +config.card_height   || null,
+        color_low:        config.color_low      || null,
+        color_empty:      config.color_empty    || null,
+        color_full:       config.color_full     || null,
         card_background:  config.card_background  || null,
         card_border:      config.card_border      || null,
         text_color:       config.text_color       || null,
@@ -322,6 +325,9 @@ class WellWaterCard extends HTMLElement {
         history_hours:   24,
         font_family:     null,
         card_height:     null,
+        color_low:       null,
+        color_empty:     null,
+        color_full:      null,
         card_background: null,
         card_border:     null,
         text_color:      null,
@@ -687,11 +693,16 @@ class WellWaterCard extends HTMLElement {
     const isEmpty = level !== null && pct < 5;
     const isWarn  = warn !== null  && level !== null && level < warn;
     const isFull  = level !== null && pct > 90;
-    // Status colors (warn/empty/full) still win over a user-picked color, so the
-    // alert at-a-glance behavior is preserved. Custom `color` only tints the
-    // default "ok" state.
-    const okPal   = palFromMain(wcfg.color) || WATER_PAL.ok;
-    const pal     = isEmpty ? WATER_PAL.low : isWarn ? WATER_PAL.warn : isFull ? WATER_PAL.full : okPal;
+    // Per-well custom OK color, plus card-wide overrides for the LOW /
+    // EMPTY / FULL alert states. Custom OK is per-well (so two wells can
+    // each have their own normal tint); the alert colors are top-level so
+    // both wells share the same "warning" / "empty" / "full" hue.
+    const cc       = this._config || {};
+    const okPal    = palFromMain(wcfg.color)    || WATER_PAL.ok;
+    const lowPal   = palFromMain(cc.color_low)  || WATER_PAL.warn;
+    const emptyPal = palFromMain(cc.color_empty)|| WATER_PAL.low;
+    const fullPal  = palFromMain(cc.color_full) || WATER_PAL.full;
+    const pal      = isEmpty ? emptyPal : isWarn ? lowPal : isFull ? fullPal : okPal;
 
     // Per-well style override: well_style on a per-well config wins over the
     // top-level card-wide well_style. Empty string means "use card default".
@@ -2172,6 +2183,17 @@ class WellWaterCardEditor extends HTMLElement {
             <input type="color" data-for="color"></div></label>
         ` : ""}
 
+        <div class="sec" style="border-top:none;padding-top:0;margin-top:-4px;opacity:.7;font-size:9px;">ALERT-STATE COLORS (OPTIONAL)</div>
+        <label class="full"><span>Low warning color</span><div class="crow">
+          <input id="color_low" type="text" placeholder="default amber">
+          <input type="color" data-for="color_low"></div></label>
+        <label class="full"><span>Nearly-empty color</span><div class="crow">
+          <input id="color_empty" type="text" placeholder="default red">
+          <input type="color" data-for="color_empty"></div></label>
+        <label class="full"><span>Nearly-full color</span><div class="crow">
+          <input id="color_full" type="text" placeholder="default teal">
+          <input type="color" data-for="color_full"></div></label>
+
         ${isCustom ? `
           <div class="sec" style="border-top:none;padding-top:0;margin-top:-4px;opacity:.7;font-size:9px;">CUSTOM COLORS</div>
           <label><span>Card background</span><div class="crow">
@@ -2261,6 +2283,14 @@ class WellWaterCardEditor extends HTMLElement {
     // pick a preset).
     sv("font_family",      (["mono","ha","sans","serif"].includes(c.font_family) ? c.font_family : "mono"));
     sv("card_height",      c.card_height != null ? c.card_height : "");
+    sv("color_low",        c.color_low   || "");
+    sv("color_empty",      c.color_empty || "");
+    sv("color_full",       c.color_full  || "");
+    // Sync the colour-wheel pickers next to each text input.
+    ["color_low","color_empty","color_full"].forEach(f => {
+      const p = this.shadowRoot.querySelector(`input[type=color][data-for="${f}"]`);
+      if (p && c[f] && /^#[0-9a-fA-F]{6}$/.test(c[f])) p.value = c[f];
+    });
     // wave_intensity may be a preset name or a number; the dropdown only
     // knows the preset names, so fall back to "normal" for numeric values.
     sv("wave_intensity",   typeof c.wave_intensity === "string" ? c.wave_intensity : "normal");
@@ -2371,7 +2401,7 @@ class WellWaterCardEditor extends HTMLElement {
 
     // All other top-level fields
     ["name","theme","well_style","well_position","dual_arrangement","font_size","font_family","wave_intensity","history_hours","card_height",
-     "sensor_unit","display_unit","min","max","warn_low","color",
+     "sensor_unit","display_unit","min","max","warn_low","color","color_low","color_empty","color_full",
      "card_background","card_border","text_color","title_color"
     ].forEach(f => onchange(f, f, null));
 
