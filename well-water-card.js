@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v32
+ * Well Water Level Card  — v33
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=32   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=33   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -1579,8 +1579,8 @@ class WellWaterCard extends HTMLElement {
 
   // ── Readings block ───────────────────────────────────────────────────────────
 
-  _readings(d, t, compact, hideBadge) {
-    const { level, pct, unit, col, glow, pumpOn, lbl, status } = d;
+  _readings(d, t, compact, hideBadge, showName) {
+    const { level, pct, unit, col, glow, pumpOn, lbl, status, name } = d;
     const ul   = uLabel(unit);
     const scale = this._fontScale();
     const fsBig   = Math.round((compact ? 22 : 32) * scale) + "px";
@@ -1589,11 +1589,19 @@ class WellWaterCard extends HTMLElement {
     // so the section header reads as a real label, not a whisper.
     const fsLabel = Math.round((compact ? 9 : 11) * scale) + "px";
     const fsBadge = Math.round((compact ? 8 : 9) * scale);
+    const fsName  = Math.round((compact ? 11 : 13) * scale) + "px";
     // Status badge sits to the right of the LEVEL label. Skipped in dual
     // mode (hideBadge=true) where each well already has its own badge in
     // the per-well header.
     const badge = hideBadge ? "" :
       "<span style='font-size:" + fsBadge + "px;font-weight:700;letter-spacing:.15em;padding:2px 8px;border-radius:4px;color:" + col + ";border:1px solid " + col + "44;background:" + this._badgeBg(d) + ";white-space:nowrap;'>" + status + "</span>";
+    // Single-mode fallback: when the card title is hidden, surface the
+    // well's name above LEVEL so users still know which sensor this is.
+    // In dual mode the per-well header already shows it (showName stays
+    // false), so we don't double up.
+    const namePrefix = (showName && name)
+      ? "<div style='font-size:" + fsName + ";font-weight:700;color:" + t.titleColor + ";letter-spacing:.06em;margin-bottom:6px;text-transform:uppercase;'>" + name + "</div>"
+      : "";
 
     const pumpHtml = pumpOn !== null
       ? "<div class='mi'><div class='ml'>Pump</div><div class='mv'>" +
@@ -1624,6 +1632,7 @@ class WellWaterCard extends HTMLElement {
       : "";
 
     return (
+      namePrefix +
       "<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;'>" +
         "<div style='font-size:" + fsLabel + ";font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:" + t.textMuted + ";'>" + lbl + "</div>" +
         badge +
@@ -1716,13 +1725,15 @@ class WellWaterCard extends HTMLElement {
     const svgH = this._slotHeight();
     const svgMaxW = (isHorizStyle && !isVertical) ? "max-width:55%;" : "";
     const svgBlock =
-      "<div class='svg-wrap' style='min-width:0;" + svgMaxW + "min-height:" + svgH + "px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" +
+      "<div class='svg-wrap' style='min-width:0;" + svgMaxW + "height:" + svgH + "px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" +
       this._renderSvg(d, t.shaft, "large") +
       "</div>";
 
     const readBlock =
       "<div style='flex:1;min-width:0;" + (isVertical ? "" : "padding-top:8px;") + "'>" +
-      this._readings(d, t, false) +
+      // showName=true when the title is hidden so the well name still appears
+      // somewhere on the card.
+      this._readings(d, t, false, false, !showTitle) +
       this._historyBlock(c.entity, t) +
       "</div>";
 
@@ -1784,14 +1795,14 @@ class WellWaterCard extends HTMLElement {
       const isHorizStyle = d.wellStyle === "tank-horizontal";
       const inner = stacked
         ? (isHorizStyle
-            ? "<div style='min-width:0;min-height:" + this._slotHeight() + "px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
+            ? "<div style='min-width:0;height:" + this._slotHeight() + "px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
               "<div style='padding-top:8px;'>" + this._readings(d, t, false, true) + historyHtml + "</div>"
             : "<div style='display:flex;align-items:flex-start;gap:16px;'>" +
-                "<div style='min-width:0;min-height:" + this._slotHeight() + "px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
+                "<div style='min-width:0;height:" + this._slotHeight() + "px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
                 "<div style='flex:1;min-width:0;padding-top:8px;'>" + this._readings(d, t, false, true) + historyHtml + "</div>" +
               "</div>"
           )
-        : "<div style='display:flex;justify-content:center;align-items:center;min-height:" + this._slotHeight(true) + "px;'>" + this._renderSvg(d, t.shaft, "small", idx) + "</div>" +
+        : "<div style='display:flex;justify-content:center;align-items:center;height:" + this._slotHeight(true) + "px;'>" + this._renderSvg(d, t.shaft, "small", idx) + "</div>" +
           "<div style='padding-top:8px;'>" + this._readings(d, t, true, true) + historyHtml + "</div>";
 
       // Stacked separator between wells
