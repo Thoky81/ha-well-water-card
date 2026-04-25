@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v31
+ * Well Water Level Card  — v32
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=31   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=32   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -1579,8 +1579,8 @@ class WellWaterCard extends HTMLElement {
 
   // ── Readings block ───────────────────────────────────────────────────────────
 
-  _readings(d, t, compact) {
-    const { level, pct, unit, col, glow, pumpOn, lbl } = d;
+  _readings(d, t, compact, hideBadge) {
+    const { level, pct, unit, col, glow, pumpOn, lbl, status } = d;
     const ul   = uLabel(unit);
     const scale = this._fontScale();
     const fsBig   = Math.round((compact ? 22 : 32) * scale) + "px";
@@ -1588,6 +1588,12 @@ class WellWaterCard extends HTMLElement {
     // Bigger LEVEL / VOLUME label — was 9px, now 11 (non-compact). Bold too
     // so the section header reads as a real label, not a whisper.
     const fsLabel = Math.round((compact ? 9 : 11) * scale) + "px";
+    const fsBadge = Math.round((compact ? 8 : 9) * scale);
+    // Status badge sits to the right of the LEVEL label. Skipped in dual
+    // mode (hideBadge=true) where each well already has its own badge in
+    // the per-well header.
+    const badge = hideBadge ? "" :
+      "<span style='font-size:" + fsBadge + "px;font-weight:700;letter-spacing:.15em;padding:2px 8px;border-radius:4px;color:" + col + ";border:1px solid " + col + "44;background:" + this._badgeBg(d) + ";white-space:nowrap;'>" + status + "</span>";
 
     const pumpHtml = pumpOn !== null
       ? "<div class='mi'><div class='ml'>Pump</div><div class='mv'>" +
@@ -1618,7 +1624,10 @@ class WellWaterCard extends HTMLElement {
       : "";
 
     return (
-      "<div style='font-size:" + fsLabel + ";font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:" + t.textMuted + ";margin-bottom:4px;'>" + lbl + "</div>" +
+      "<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;'>" +
+        "<div style='font-size:" + fsLabel + ";font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:" + t.textMuted + ";'>" + lbl + "</div>" +
+        badge +
+      "</div>" +
       "<div style='font-size:" + fsBig + ";font-weight:700;color:" + col + ";line-height:1;letter-spacing:-.02em;text-shadow:0 0 20px " + glow + ";'>" +
         (level !== null ? uFmt(level, unit) : "—") +
         "<span style='font-size:" + fsSmall + ";color:" + t.textMuted + ";margin-left:2px;'>" + ul + "</span>" +
@@ -1695,22 +1704,19 @@ class WellWaterCard extends HTMLElement {
       ? "<span style='font-size:" + Math.round(9 * scale) + "px;color:" + t.textMuted + ";margin-left:6px;'>sensor: " + uLabel(suUnit) + "</span>"
       : "";
 
-    // tank-horizontal's wide aspect doesn't fit beside readings on most
-    // cards — force vertical (stacked) layout so readings sit below the
-    // tank, regardless of well_position.
     const isHorizStyle = d.wellStyle === "tank-horizontal";
-    const isVertical = isHorizStyle || pos === "top" || pos === "bottom";
-    const isReverse  = !isHorizStyle && (pos === "right" || pos === "bottom");
+    const isVertical = pos === "top" || pos === "bottom";
+    const isReverse  = pos === "right" || pos === "bottom";
 
-    // SVG slot: reserve the same vertical space across styles so anything
-    // below (readings, Min/Max, history) lines up. min-width:0 (instead of
-    // the previous flex-shrink:0) lets the wrapper shrink in the flex row,
-    // so the wide tank-horizontal SVG can scale down via svg{max-width:100%}
-    // when the card is too narrow to fit it next to the readings — without
-    // it the SVG pushed the readings column off the right edge.
+    // SVG slot: reserve the same vertical space across styles so content
+    // below lines up. tank-horizontal's wide aspect would otherwise hog
+    // the row and crush the readings into a narrow strip — cap its slot
+    // to ~55% of the row width when laid out side-by-side. Vertical
+    // styles are already narrow enough that they don't need a cap.
     const svgH = this._slotHeight();
+    const svgMaxW = (isHorizStyle && !isVertical) ? "max-width:55%;" : "";
     const svgBlock =
-      "<div class='svg-wrap' style='min-width:0;min-height:" + svgH + "px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" +
+      "<div class='svg-wrap' style='min-width:0;" + svgMaxW + "min-height:" + svgH + "px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" +
       this._renderSvg(d, t.shaft, "large") +
       "</div>";
 
@@ -1722,20 +1728,20 @@ class WellWaterCard extends HTMLElement {
 
     const bodyContent = isReverse ? readBlock + svgBlock : svgBlock + readBlock;
 
-    // Header: optionally show the title; the status badge always renders.
-    // When the title is hidden, the badge floats right on its own row.
-    const header =
-      "<div class='hdr'>" +
-        (showTitle ? "<div class='htitle'>" + name + suBadge + "</div>" : "<div></div>") +
-        "<div class='badge'>" + status + "</div>" +
-      "</div>";
+    // Header now only renders when the title is enabled — the status
+    // badge moved into _readings (next to the LEVEL label) so a hidden
+    // title leaves no orphan top space.
+    const header = showTitle
+      ? "<div class='hdr'><div class='htitle'>" + name + suBadge + "</div></div>"
+      : "";
+    // Tighter top padding when there's no header to compensate.
+    const cardPad = showTitle ? "20px 24px 24px" : "16px 24px 22px";
 
     this.shadowRoot.innerHTML =
       "<style>" + this._css(t) +
-      ".card{padding:20px 24px 24px;container-type:inline-size;" + (c.card_height ? "min-height:" + (+c.card_height) + "px;" : "") + "}" +
-      ".hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:" + (showTitle ? 18 : 10) + "px;}" +
+      ".card{padding:" + cardPad + ";container-type:inline-size;" + (c.card_height ? "min-height:" + (+c.card_height) + "px;" : "") + "}" +
+      ".hdr{margin-bottom:14px;}" +
       ".htitle{font-size:" + titleFs + "px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:" + t.titleColor + ";}" +
-      ".badge{font-size:" + badgeFs + "px;font-weight:700;letter-spacing:.15em;padding:3px 8px;border-radius:4px;color:" + col + ";border:1px solid " + col + "44;background:" + this._badgeBg(d) + ";}" +
       ".body{display:flex;flex-direction:" + (isVertical ? "column" : "row") + ";align-items:" + (isVertical ? "stretch" : "flex-start") + ";gap:" + (isVertical ? "14px" : "20px") + ";}" +
       // On narrow cards (e.g. phone sidebar, dense grid), collapse side-by-side
       // layouts to stacked so the SVG isn't squeezed into unreadable proportions.
@@ -1779,14 +1785,14 @@ class WellWaterCard extends HTMLElement {
       const inner = stacked
         ? (isHorizStyle
             ? "<div style='min-width:0;min-height:" + this._slotHeight() + "px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
-              "<div style='padding-top:8px;'>" + this._readings(d, t, false) + historyHtml + "</div>"
+              "<div style='padding-top:8px;'>" + this._readings(d, t, false, true) + historyHtml + "</div>"
             : "<div style='display:flex;align-items:flex-start;gap:16px;'>" +
                 "<div style='min-width:0;min-height:" + this._slotHeight() + "px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
-                "<div style='flex:1;min-width:0;padding-top:8px;'>" + this._readings(d, t, false) + historyHtml + "</div>" +
+                "<div style='flex:1;min-width:0;padding-top:8px;'>" + this._readings(d, t, false, true) + historyHtml + "</div>" +
               "</div>"
           )
         : "<div style='display:flex;justify-content:center;align-items:center;min-height:" + this._slotHeight(true) + "px;'>" + this._renderSvg(d, t.shaft, "small", idx) + "</div>" +
-          "<div style='padding-top:8px;'>" + this._readings(d, t, true) + historyHtml + "</div>";
+          "<div style='padding-top:8px;'>" + this._readings(d, t, true, true) + historyHtml + "</div>";
 
       // Stacked separator between wells
       const topBorder = stacked && idx === 1
