@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v30
+ * Well Water Level Card  — v31
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=30   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=31   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -1555,11 +1555,12 @@ class WellWaterCard extends HTMLElement {
       // a real height.
       ":host { display: block; font-family: " + ff + "; }" +
       "ha-card { display: block; height: 100%; }" +
-      // Let SVGs shrink with the card while preserving their viewBox aspect.
-      // Without this the wider styles (notably tank-horizontal at 290px)
-      // hit the card's left/right edges on a narrow column. height:auto
-      // keeps the proportions when width is squeezed by max-width:100%.
-      "svg { max-width: 100%; height: auto; display: block; }" +
+      // Let SVGs scale to fit their slot while preserving the viewBox
+      // aspect. max-height:100% kicks in when card_height makes the slot
+      // shorter than the SVG's natural height (without it, vertical styles
+      // overflowed). With both max constraints + auto sizes the browser
+      // picks whichever dimension is tighter and rescales the other.
+      "svg { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; }" +
       // contain: paint isolates this card's repaints from the document
       // scroll; overflow-anchor:none opts the card out of being chosen
       // as a scroll anchor (the browser was picking it, then losing
@@ -1694,8 +1695,12 @@ class WellWaterCard extends HTMLElement {
       ? "<span style='font-size:" + Math.round(9 * scale) + "px;color:" + t.textMuted + ";margin-left:6px;'>sensor: " + uLabel(suUnit) + "</span>"
       : "";
 
-    const isVertical = pos === "top" || pos === "bottom";
-    const isReverse  = pos === "right" || pos === "bottom";
+    // tank-horizontal's wide aspect doesn't fit beside readings on most
+    // cards — force vertical (stacked) layout so readings sit below the
+    // tank, regardless of well_position.
+    const isHorizStyle = d.wellStyle === "tank-horizontal";
+    const isVertical = isHorizStyle || pos === "top" || pos === "bottom";
+    const isReverse  = !isHorizStyle && (pos === "right" || pos === "bottom");
 
     // SVG slot: reserve the same vertical space across styles so anything
     // below (readings, Min/Max, history) lines up. min-width:0 (instead of
@@ -1767,11 +1772,19 @@ class WellWaterCard extends HTMLElement {
       // history) lines up at the same vertical level across both wells —
       // otherwise mixing e.g. tank-horizontal with modern-dark gives one
       // column a readings row 100+ px higher than the other.
+      // tank-horizontal is wider-than-tall and doesn't fit alongside the
+      // readings — render its row as a column (SVG on top, readings below)
+      // even in stacked mode.
+      const isHorizStyle = d.wellStyle === "tank-horizontal";
       const inner = stacked
-        ? "<div style='display:flex;align-items:flex-start;gap:16px;'>" +
-            "<div style='min-width:0;min-height:" + this._slotHeight() + "px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
-            "<div style='flex:1;min-width:0;padding-top:8px;'>" + this._readings(d, t, false) + historyHtml + "</div>" +
-          "</div>"
+        ? (isHorizStyle
+            ? "<div style='min-width:0;min-height:" + this._slotHeight() + "px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
+              "<div style='padding-top:8px;'>" + this._readings(d, t, false) + historyHtml + "</div>"
+            : "<div style='display:flex;align-items:flex-start;gap:16px;'>" +
+                "<div style='min-width:0;min-height:" + this._slotHeight() + "px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
+                "<div style='flex:1;min-width:0;padding-top:8px;'>" + this._readings(d, t, false) + historyHtml + "</div>" +
+              "</div>"
+          )
         : "<div style='display:flex;justify-content:center;align-items:center;min-height:" + this._slotHeight(true) + "px;'>" + this._renderSvg(d, t.shaft, "small", idx) + "</div>" +
           "<div style='padding-top:8px;'>" + this._readings(d, t, true) + historyHtml + "</div>";
 
