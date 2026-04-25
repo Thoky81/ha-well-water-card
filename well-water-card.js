@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v34
+ * Well Water Level Card  — v35
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=34   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=35   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -288,6 +288,7 @@ class WellWaterCard extends HTMLElement {
         history_hours:    +config.history_hours || 24,
         font_family:      config.font_family    || null,
         card_height:      +config.card_height   || null,
+        responsive_breakpoint: config.responsive_breakpoint != null ? +config.responsive_breakpoint : null,
         color_low:        config.color_low      || null,
         color_empty:      config.color_empty    || null,
         color_full:       config.color_full     || null,
@@ -325,6 +326,7 @@ class WellWaterCard extends HTMLElement {
         history_hours:   24,
         font_family:     null,
         card_height:     null,
+        responsive_breakpoint: null,
         color_low:       null,
         color_empty:     null,
         color_full:      null,
@@ -1754,9 +1756,13 @@ class WellWaterCard extends HTMLElement {
       ".hdr{margin-bottom:14px;}" +
       ".htitle{font-size:" + titleFs + "px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:" + t.titleColor + ";}" +
       ".body{display:flex;flex-direction:" + (isVertical ? "column" : "row") + ";align-items:" + (isVertical ? "stretch" : "flex-start") + ";gap:" + (isVertical ? "14px" : "20px") + ";}" +
-      // On narrow cards (e.g. phone sidebar, dense grid), collapse side-by-side
-      // layouts to stacked so the SVG isn't squeezed into unreadable proportions.
-      "@container (max-width: 320px){.body{flex-direction:column !important;align-items:stretch !important;gap:14px !important;}.svg-wrap{display:flex;justify-content:center;}}" +
+      // On narrow cards (phone sidebar, dense grid) collapse side-by-side
+      // layouts to stacked. Threshold is configurable via responsive_breakpoint
+      // (default 320 for single mode). 0 disables the collapse entirely.
+      ((c.responsive_breakpoint == null ? 320 : c.responsive_breakpoint) > 0
+        ? "@container (max-width: " + (c.responsive_breakpoint == null ? 320 : c.responsive_breakpoint) + "px){.body{flex-direction:column !important;align-items:stretch !important;gap:14px !important;}.svg-wrap{display:flex;justify-content:center;}}"
+        : ""
+      ) +
       "</style>" +
       "<ha-card><div class='card'>" +
         header +
@@ -1837,7 +1843,10 @@ class WellWaterCard extends HTMLElement {
       ".grid.sbs .col1{padding-left:14px;}" +
       // Collapse side-by-side to stacked on narrow cards so neither well
       // gets crushed. Drop the column divider and horizontal padding too.
-      "@container (max-width: 360px){.grid.sbs{display:flex;flex-direction:column;}.grid.sbs .col0,.grid.sbs .col1{border:none;padding:0;}.grid.sbs .col1{border-top:1px solid " + t.divider + ";padding-top:14px;margin-top:14px;}}" +
+      ((c.responsive_breakpoint == null ? 360 : c.responsive_breakpoint) > 0
+        ? "@container (max-width: " + (c.responsive_breakpoint == null ? 360 : c.responsive_breakpoint) + "px){.grid.sbs{display:flex;flex-direction:column;}.grid.sbs .col0,.grid.sbs .col1{border:none;padding:0;}.grid.sbs .col1{border-top:1px solid " + t.divider + ";padding-top:14px;margin-top:14px;}}"
+        : ""
+      ) +
       "</style>" +
       "<ha-card><div class='card'>" +
         (showTitle ? "<div class='chdr'><div class='ctitle'>" + c.name + "</div></div>" : "") +
@@ -2211,6 +2220,8 @@ class WellWaterCardEditor extends HTMLElement {
           </select></label>
         <label><span>Card height (px, optional)</span>
           <input id="card_height" type="number" step="10" placeholder="auto"></label>
+        <label><span>Responsive breakpoint (px)</span>
+          <input id="responsive_breakpoint" type="number" step="10" placeholder="${layout === "dual" ? "360 (default)" : "320 (default)"}"></label>
         <label class="cb full"><input id="show_title" type="checkbox"><span>Show card title</span></label>
         <label class="cb full"><input id="show_minmax" type="checkbox"><span>Show Min / Max at the bottom</span></label>
         <label class="cb full"><input id="animate" type="checkbox"><span>Animate water (wavy surface)</span></label>
@@ -2340,6 +2351,7 @@ class WellWaterCardEditor extends HTMLElement {
     // pick a preset).
     sv("font_family",      (["mono","ha","sans","serif"].includes(c.font_family) ? c.font_family : "mono"));
     sv("card_height",      c.card_height != null ? c.card_height : "");
+    sv("responsive_breakpoint", c.responsive_breakpoint != null ? c.responsive_breakpoint : "");
     sv("color_low",        c.color_low   || "");
     sv("color_empty",      c.color_empty || "");
     sv("color_full",       c.color_full  || "");
@@ -2457,7 +2469,7 @@ class WellWaterCardEditor extends HTMLElement {
     }
 
     // All other top-level fields
-    ["name","theme","well_style","well_position","dual_arrangement","font_size","font_family","wave_intensity","history_hours","card_height",
+    ["name","theme","well_style","well_position","dual_arrangement","font_size","font_family","wave_intensity","history_hours","card_height","responsive_breakpoint",
      "sensor_unit","display_unit","min","max","warn_low","color","color_low","color_empty","color_full",
      "card_background","card_border","text_color","title_color"
     ].forEach(f => onchange(f, f, null));
@@ -2513,7 +2525,7 @@ class WellWaterCardEditor extends HTMLElement {
 
   _set(field, val) {
     const upd = Object.assign({}, this._config);
-    const nums = ["min","max","warn_low","history_hours","card_height"];
+    const nums = ["min","max","warn_low","history_hours","card_height","responsive_breakpoint"];
     if (nums.includes(field)) {
       upd[field] = val === "" ? undefined : +val;
     } else if (val === "" || val == null) {
