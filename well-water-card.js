@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v36
+ * Well Water Level Card  — v37
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=36   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=37   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -244,6 +244,7 @@ function defaultWell(n) {
     max:          4,
     warn_low:     null,
     color:        null,
+    history_color: null,
   };
 }
 
@@ -288,6 +289,7 @@ class WellWaterCard extends HTMLElement {
         history_hours:    +config.history_hours || 24,
         font_family:      config.font_family    || null,
         responsive_breakpoint: config.responsive_breakpoint != null ? +config.responsive_breakpoint : null,
+        history_color:    config.history_color  || null,
         color_low:        config.color_low      || null,
         color_empty:      config.color_empty    || null,
         color_full:       config.color_full     || null,
@@ -325,6 +327,7 @@ class WellWaterCard extends HTMLElement {
         history_hours:   24,
         font_family:     null,
         responsive_breakpoint: null,
+        history_color:   null,
         color_low:       null,
         color_empty:     null,
         color_full:      null,
@@ -480,7 +483,7 @@ class WellWaterCard extends HTMLElement {
   }
 
   // Header label + sparkline wrapper used by both single and dual renders.
-  _historyBlock(entityId, t) {
+  _historyBlock(entityId, t, wcfg) {
     if (!this._config || !this._config.show_history || !entityId) return "";
     const hours = +this._config.history_hours || 24;
     const label = hours === 1  ? "LAST HOUR"
@@ -488,11 +491,13 @@ class WellWaterCard extends HTMLElement {
                 : hours < 24   ? "LAST " + hours + " HOURS"
                 : hours % 24 === 0 ? "LAST " + (hours / 24) + " DAYS"
                 : "LAST " + hours + "H";
+    // Color precedence: per-well override > card-wide override > theme title color.
+    const color = (wcfg && wcfg.history_color) || this._config.history_color || t.titleColor;
     const headerFs = Math.round(11 * this._fontScale());
     return (
       "<div style='margin-top:12px;padding-top:10px;border-top:1px solid " + t.divider + ";'>" +
         "<div style='font-size:" + headerFs + "px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:" + t.textMuted + ";margin-bottom:6px;'>" + label + "</div>" +
-        this._sparkline(entityId, t, t.titleColor, { height: 46 }) +
+        this._sparkline(entityId, t, color, { height: 46 }) +
       "</div>"
     );
   }
@@ -700,6 +705,13 @@ class WellWaterCard extends HTMLElement {
                  ? wcfg.well_style
                  : (this._config && this._config.well_style);
 
+    // Accent color: per-well history_color > card-wide history_color > null.
+    // Used for both the history-chart line/fill AND the well-name colouring,
+    // so a single picker styles both.
+    const accent = (wcfg.history_color != null && wcfg.history_color !== "")
+      ? wcfg.history_color
+      : (this._config && this._config.history_color) || null;
+
     return {
       level, pct, min, max, pumpOn,
       unit:   du,
@@ -711,6 +723,7 @@ class WellWaterCard extends HTMLElement {
       status: isEmpty ? "EMPTY" : isWarn ? "LOW" : isFull ? "FULL" : "OK",
       lbl:    uIsVol(du) ? "Volume" : "Level",
       wellStyle: ws,
+      accent,
       isEmpty, isWarn, isFull,
     };
   }
@@ -1568,7 +1581,8 @@ class WellWaterCard extends HTMLElement {
   // ── Readings block ───────────────────────────────────────────────────────────
 
   _readings(d, t, compact, hideBadge, showName) {
-    const { level, pct, unit, col, glow, pumpOn, lbl, status, name } = d;
+    const { level, pct, unit, col, glow, pumpOn, lbl, status, name, accent } = d;
+    const nameCol = accent || t.titleColor;
     const ul   = uLabel(unit);
     const scale = this._fontScale();
     const fsBig   = Math.round((compact ? 22 : 32) * scale) + "px";
@@ -1588,7 +1602,7 @@ class WellWaterCard extends HTMLElement {
     // In dual mode the per-well header already shows it (showName stays
     // false), so we don't double up.
     const namePrefix = (showName && name)
-      ? "<div style='font-size:" + fsName + ";font-weight:700;color:" + t.titleColor + ";letter-spacing:.06em;margin-bottom:6px;text-transform:uppercase;'>" + name + "</div>"
+      ? "<div style='font-size:" + fsName + ";font-weight:700;color:" + nameCol + ";letter-spacing:.06em;margin-bottom:6px;text-transform:uppercase;'>" + name + "</div>"
       : "";
 
     const pumpHtml = pumpOn !== null
@@ -1722,7 +1736,9 @@ class WellWaterCard extends HTMLElement {
       // showName=true when the title is hidden so the well name still appears
       // somewhere on the card.
       this._readings(d, t, false, false, !showTitle) +
-      this._historyBlock(c.entity, t) +
+      // In single mode the whole config IS the well config (top-level entity,
+      // history_color, etc.), so pass `c` as the wcfg.
+      this._historyBlock(c.entity, t, c) +
       "</div>";
 
     const bodyContent = isReverse ? readBlock + svgBlock : svgBlock + readBlock;
@@ -1740,7 +1756,7 @@ class WellWaterCard extends HTMLElement {
       "<style>" + this._css(t) +
       ".card{padding:" + cardPad + ";container-type:inline-size;}" +
       ".hdr{margin-bottom:14px;}" +
-      ".htitle{font-size:" + titleFs + "px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:" + t.titleColor + ";}" +
+      ".htitle{font-size:" + titleFs + "px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:" + (d.accent || t.titleColor) + ";}" +
       ".body{display:flex;flex-direction:" + (isVertical ? "column" : "row") + ";align-items:" + (isVertical ? "stretch" : "flex-start") + ";gap:" + (isVertical ? "14px" : "20px") + ";}" +
       // On narrow cards (phone sidebar, dense grid) collapse side-by-side
       // layouts to stacked. Threshold is configurable via responsive_breakpoint
@@ -1770,8 +1786,9 @@ class WellWaterCard extends HTMLElement {
 
     const wellHtml = (d, idx) => {
       const { col, status, name } = d;
-      const wellEntity = (c.wells[idx] || {}).entity;
-      const historyHtml = this._historyBlock(wellEntity, t);
+      const wcfg = c.wells[idx] || {};
+      const wellEntity = wcfg.entity;
+      const historyHtml = this._historyBlock(wellEntity, t, wcfg);
 
       // Stacked: full-width row with large SVG on left, readings on right.
       // Side-by-side: compact column with small SVG on top + readings below.
@@ -1805,7 +1822,7 @@ class WellWaterCard extends HTMLElement {
       return (
         "<div style='" + topBorder + "'>" +
           "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;'>" +
-            "<div style='font-size:" + wellTitleFs + "px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:" + t.titleColor + ";'>" + name + "</div>" +
+            "<div style='font-size:" + wellTitleFs + "px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:" + (d.accent || t.titleColor) + ";'>" + name + "</div>" +
             "<div style='font-size:" + wellBadgeFs + "px;font-weight:700;letter-spacing:.1em;padding:2px 7px;border-radius:3px;color:" + col + ";border:1px solid " + col + "44;background:" + this._badgeBg(d) + ";'>" + status + "</div>" +
           "</div>" +
           inner +
@@ -2077,6 +2094,9 @@ class WellWaterCardEditor extends HTMLElement {
           <label class="full"><span>Water color (OK state)</span><div class="crow">
             <input id="${p}color" type="text" placeholder="default blue">
             <input type="color" data-for="${p}color"></div></label>
+          <label class="full"><span>Accent color (override)</span><div class="crow">
+            <input id="${p}history_color" type="text" placeholder="use card default">
+            <input type="color" data-for="${p}history_color"></div></label>
           <label class="full"><span>Well style (override)</span>
             <select id="${p}well_style">
               ${opt("",               "Use card default")}
@@ -2235,7 +2255,10 @@ class WellWaterCardEditor extends HTMLElement {
             <input type="color" data-for="color"></div></label>
         ` : ""}
 
-        <div class="sec" style="border-top:none;padding-top:0;margin-top:-4px;opacity:.7;font-size:9px;">ALERT-STATE COLORS (OPTIONAL)</div>
+        <div class="sec" style="border-top:none;padding-top:0;margin-top:-4px;opacity:.7;font-size:9px;">ACCENT &amp; ALERT COLORS (OPTIONAL)</div>
+        <label class="full"><span>Accent color (well name + history graph)</span><div class="crow">
+          <input id="history_color" type="text" placeholder="default theme title color">
+          <input type="color" data-for="history_color"></div></label>
         <label class="full"><span>Low warning color</span><div class="crow">
           <input id="color_low" type="text" placeholder="default amber">
           <input type="color" data-for="color_low"></div></label>
@@ -2335,11 +2358,12 @@ class WellWaterCardEditor extends HTMLElement {
     // pick a preset).
     sv("font_family",      (["mono","ha","sans","serif"].includes(c.font_family) ? c.font_family : "mono"));
     sv("responsive_breakpoint", c.responsive_breakpoint != null ? c.responsive_breakpoint : "");
+    sv("history_color",    c.history_color || "");
     sv("color_low",        c.color_low   || "");
     sv("color_empty",      c.color_empty || "");
     sv("color_full",       c.color_full  || "");
     // Sync the colour-wheel pickers next to each text input.
-    ["color_low","color_empty","color_full"].forEach(f => {
+    ["history_color","color_low","color_empty","color_full"].forEach(f => {
       const p = this.shadowRoot.querySelector(`input[type=color][data-for="${f}"]`);
       if (p && c[f] && /^#[0-9a-fA-F]{6}$/.test(c[f])) p.value = c[f];
     });
@@ -2377,8 +2401,10 @@ class WellWaterCardEditor extends HTMLElement {
         sv(p + "max",      w.max      != null ? w.max      : "");
         sv(p + "warn_low", w.warn_low != null ? w.warn_low : "");
         sv(p + "color",    w.color    || "");
+        sv(p + "history_color", w.history_color || "");
         sv(p + "well_style", w.well_style || "");
         syncWheel(p + "color", w.color);
+        syncWheel(p + "history_color", w.history_color);
       });
     }
   }
@@ -2453,7 +2479,7 @@ class WellWaterCardEditor extends HTMLElement {
 
     // All other top-level fields
     ["name","theme","well_style","well_position","dual_arrangement","font_size","font_family","wave_intensity","history_hours","responsive_breakpoint",
-     "sensor_unit","display_unit","min","max","warn_low","color","color_low","color_empty","color_full",
+     "sensor_unit","display_unit","min","max","warn_low","color","history_color","color_low","color_empty","color_full",
      "card_background","card_border","text_color","title_color"
     ].forEach(f => onchange(f, f, null));
 
@@ -2484,7 +2510,7 @@ class WellWaterCardEditor extends HTMLElement {
     // Per-well selects / inputs (dual mode)
     [0, 1].forEach(idx => {
       const p = "w" + idx + "_";
-      ["name","sensor_unit","display_unit","min","max","warn_low","color","well_style"].forEach(f => {
+      ["name","sensor_unit","display_unit","min","max","warn_low","color","history_color","well_style"].forEach(f => {
         onchange(p + f, f, idx);
       });
     });
