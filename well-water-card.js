@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v27
+ * Well Water Level Card  — v28
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=27   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=28   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -1856,13 +1856,36 @@ class WellWaterCardEditor extends HTMLElement {
   // ── HA lifecycle ────────────────────────────────────────────────────────────
 
   setConfig(config) {
-    // Always accept and rebuild — do NOT guard with JSON.stringify.
-    // Root cause of "editor not working": after a field change fires
-    // config-changed, HA calls setConfig back with the same object we
-    // already stored, so stringify comparison matched and skipped the
-    // rebuild. Layout / theme switches appeared to do nothing.
+    // Smart rebuild: only re-create the DOM when something STRUCTURAL
+    // changed (layout / dual ↔ single, theme custom-section toggle,
+    // sensor_unit which repopulates display_unit dropdowns). For simple
+    // value updates — like dragging the colour picker — we just push
+    // values into the existing DOM via _applyValues. Without this, every
+    // drag step caused HA to ping setConfig back, which used to rebuild
+    // the whole editor and wipe the color picker mid-drag.
+    const old = this._config;
     this._config = Object.assign({}, config);
-    this._build();
+    if (!this._built || this._needsStructuralRebuild(old, this._config)) {
+      this._build();
+    } else {
+      this._applyValues();
+    }
+  }
+
+  _needsStructuralRebuild(oldCfg, newCfg) {
+    if (!oldCfg) return true;
+    if (oldCfg.layout !== newCfg.layout) return true;
+    // Custom-colours block appears/disappears with theme=custom.
+    if ((oldCfg.theme === "custom") !== (newCfg.theme === "custom")) return true;
+    // sensor_unit changes the display_unit dropdown's options.
+    if (oldCfg.sensor_unit !== newCfg.sensor_unit) return true;
+    if (newCfg.layout === "dual") {
+      const a = oldCfg.wells || [], b = newCfg.wells || [];
+      for (let i = 0; i < 2; i++) {
+        if ((a[i] || {}).sensor_unit !== (b[i] || {}).sensor_unit) return true;
+      }
+    }
+    return false;
   }
 
   set hass(hass) {
