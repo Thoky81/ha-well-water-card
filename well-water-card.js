@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v26
+ * Well Water Level Card  — v27
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=26   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=27   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -1525,6 +1525,11 @@ class WellWaterCard extends HTMLElement {
       // a real height.
       ":host { display: block; font-family: " + ff + "; }" +
       "ha-card { display: block; height: 100%; }" +
+      // Let SVGs shrink with the card while preserving their viewBox aspect.
+      // Without this the wider styles (notably tank-horizontal at 290px)
+      // hit the card's left/right edges on a narrow column. height:auto
+      // keeps the proportions when width is squeezed by max-width:100%.
+      "svg { max-width: 100%; height: auto; display: block; }" +
       // contain: paint isolates this card's repaints from the document
       // scroll; overflow-anchor:none opts the card out of being chosen
       // as a scroll anchor (the browser was picking it, then losing
