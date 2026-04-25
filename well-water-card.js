@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v28
+ * Well Water Level Card  — v29
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=28   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=29   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -287,6 +287,7 @@ class WellWaterCard extends HTMLElement {
         show_history:     config.show_history === true,
         history_hours:    +config.history_hours || 24,
         font_family:      config.font_family    || null,
+        card_height:      +config.card_height   || null,
         card_background:  config.card_background  || null,
         card_border:      config.card_border      || null,
         text_color:       config.text_color       || null,
@@ -320,6 +321,7 @@ class WellWaterCard extends HTMLElement {
         show_history:    false,
         history_hours:   24,
         font_family:     null,
+        card_height:     null,
         card_background: null,
         card_border:     null,
         text_color:      null,
@@ -593,6 +595,23 @@ class WellWaterCard extends HTMLElement {
   _fontScale() {
     const s = this._config && this._config.font_size;
     return s === "small" ? 0.85 : s === "large" ? 1.2 : 1.0;
+  }
+
+  // Vertical space reserved for the well/tank illustration. Defaults match
+  // the tallest natural SVG height per size, so content below (readings,
+  // history) lines up across styles. Users can shrink it via the
+  // `card_height` option to make the whole card more compact.
+  _slotHeight(small) {
+    const c = this._config || {};
+    const def = small ? 230 : 290;
+    if (c.card_height) {
+      // Reserve some vertical room for the title + readings + (optional)
+      // history, then give whatever's left to the illustration. Floor at
+      // 140 (small) / 160 (large) so the SVG never collapses to nothing.
+      const reserved = (c.show_history ? 130 : 100);
+      return Math.max(small ? 140 : 160, +c.card_height - reserved);
+    }
+    return def;
   }
 
   // Resolve font-family. Named presets map to common stacks; anything else
@@ -1667,12 +1686,15 @@ class WellWaterCard extends HTMLElement {
     const isVertical = pos === "top" || pos === "bottom";
     const isReverse  = pos === "right" || pos === "bottom";
 
-    // Fixed SVG slot: reserve the same vertical space regardless of the
-    // style picked, so content below (readings, Min/Max, history) sits at a
-    // predictable level. Shorter SVGs like tank-horizontal sit at the top
-    // and get the extra space below.
+    // SVG slot: reserve the same vertical space across styles so anything
+    // below (readings, Min/Max, history) lines up. min-width:0 (instead of
+    // the previous flex-shrink:0) lets the wrapper shrink in the flex row,
+    // so the wide tank-horizontal SVG can scale down via svg{max-width:100%}
+    // when the card is too narrow to fit it next to the readings — without
+    // it the SVG pushed the readings column off the right edge.
+    const svgH = this._slotHeight();
     const svgBlock =
-      "<div class='svg-wrap' style='flex-shrink:0;min-height:290px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" +
+      "<div class='svg-wrap' style='min-width:0;min-height:" + svgH + "px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" +
       this._renderSvg(d, t.shaft, "large") +
       "</div>";
 
@@ -1694,7 +1716,7 @@ class WellWaterCard extends HTMLElement {
 
     this.shadowRoot.innerHTML =
       "<style>" + this._css(t) +
-      ".card{padding:20px 24px 24px;container-type:inline-size;}" +
+      ".card{padding:20px 24px 24px;container-type:inline-size;" + (c.card_height ? "min-height:" + (+c.card_height) + "px;" : "") + "}" +
       ".hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:" + (showTitle ? 18 : 10) + "px;}" +
       ".htitle{font-size:" + titleFs + "px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:" + t.titleColor + ";}" +
       ".badge{font-size:" + badgeFs + "px;font-weight:700;letter-spacing:.15em;padding:3px 8px;border-radius:4px;color:" + col + ";border:1px solid " + col + "44;background:" + this._badgeBg(d) + ";}" +
@@ -1736,10 +1758,10 @@ class WellWaterCard extends HTMLElement {
       // column a readings row 100+ px higher than the other.
       const inner = stacked
         ? "<div style='display:flex;align-items:flex-start;gap:16px;'>" +
-            "<div style='flex-shrink:0;min-height:290px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
+            "<div style='min-width:0;min-height:" + this._slotHeight() + "px;display:flex;flex-direction:column;justify-content:center;align-items:center;'>" + this._renderSvg(d, t.shaft, "large") + "</div>" +
             "<div style='flex:1;min-width:0;padding-top:8px;'>" + this._readings(d, t, false) + historyHtml + "</div>" +
           "</div>"
-        : "<div style='display:flex;justify-content:center;align-items:center;min-height:230px;'>" + this._renderSvg(d, t.shaft, "small", idx) + "</div>" +
+        : "<div style='display:flex;justify-content:center;align-items:center;min-height:" + this._slotHeight(true) + "px;'>" + this._renderSvg(d, t.shaft, "small", idx) + "</div>" +
           "<div style='padding-top:8px;'>" + this._readings(d, t, true) + historyHtml + "</div>";
 
       // Stacked separator between wells
@@ -1763,7 +1785,7 @@ class WellWaterCard extends HTMLElement {
 
     this.shadowRoot.innerHTML =
       "<style>" + this._css(t) +
-      ".card{padding:16px 18px 20px;container-type:inline-size;}" +
+      ".card{padding:16px 18px 20px;container-type:inline-size;" + (c.card_height ? "min-height:" + (+c.card_height) + "px;" : "") + "}" +
       ".chdr{display:flex;align-items:center;margin-bottom:14px;}" +
       ".ctitle{font-size:" + Math.round(11 * scale) + "px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:" + t.titleColor + ";}" +
       ".bar-w{height:3px;}" +
@@ -2119,6 +2141,8 @@ class WellWaterCardEditor extends HTMLElement {
             ${opt("sans",  "Sans-serif")}
             ${opt("serif", "Serif")}
           </select></label>
+        <label><span>Card height (px, optional)</span>
+          <input id="card_height" type="number" step="10" placeholder="auto"></label>
         <label class="cb full"><input id="show_title" type="checkbox"><span>Show card title</span></label>
         <label class="cb full"><input id="show_minmax" type="checkbox"><span>Show Min / Max at the bottom</span></label>
         <label class="cb full"><input id="animate" type="checkbox"><span>Animate water (wavy surface)</span></label>
@@ -2236,6 +2260,7 @@ class WellWaterCardEditor extends HTMLElement {
     // preserved in config (_bindEvents' onchange won't fire unless they
     // pick a preset).
     sv("font_family",      (["mono","ha","sans","serif"].includes(c.font_family) ? c.font_family : "mono"));
+    sv("card_height",      c.card_height != null ? c.card_height : "");
     // wave_intensity may be a preset name or a number; the dropdown only
     // knows the preset names, so fall back to "normal" for numeric values.
     sv("wave_intensity",   typeof c.wave_intensity === "string" ? c.wave_intensity : "normal");
@@ -2345,7 +2370,7 @@ class WellWaterCardEditor extends HTMLElement {
     }
 
     // All other top-level fields
-    ["name","theme","well_style","well_position","dual_arrangement","font_size","font_family","wave_intensity","history_hours",
+    ["name","theme","well_style","well_position","dual_arrangement","font_size","font_family","wave_intensity","history_hours","card_height",
      "sensor_unit","display_unit","min","max","warn_low","color",
      "card_background","card_border","text_color","title_color"
     ].forEach(f => onchange(f, f, null));
@@ -2401,7 +2426,7 @@ class WellWaterCardEditor extends HTMLElement {
 
   _set(field, val) {
     const upd = Object.assign({}, this._config);
-    const nums = ["min","max","warn_low","history_hours"];
+    const nums = ["min","max","warn_low","history_hours","card_height"];
     if (nums.includes(field)) {
       upd[field] = val === "" ? undefined : +val;
     } else if (val === "" || val == null) {
