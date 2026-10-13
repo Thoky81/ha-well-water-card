@@ -33,7 +33,7 @@ A Home Assistant Lovelace card that visualises a water-level (or volume) sensor 
 
 1. Copy `well-water-card.js` to `/config/www/`.
 2. Add the resource in Settings → Dashboards → Resources:
-   - URL: `/local/well-water-card.js?v=37`
+   - URL: `/local/well-water-card.js?v=38`
    - Type: **JavaScript module**
 3. Hard-refresh the browser. Bump the `?v=` number whenever you update the file.
 
@@ -96,7 +96,7 @@ wells:
 | `font_size` | `small`\|`normal`\|`large` | `normal` | Scales the readings text proportionally. |
 | `show_title` | boolean | `true` | Set `false` to hide the card title. |
 | `show_minmax` | boolean | `true` | Set `false` to hide the Min / Max row at the bottom of the readings block. |
-| `animate` | boolean | `true` | Set `false` for a flat water surface (no wave animation). Also pauses fish. |
+| `animate` | boolean | `true` | Set `false` for a flat water surface (no wave animation). Also pauses fish. The animation runs at 20 fps, pauses while the card is off screen, and stays off when the system "Reduce motion" setting is on. |
 | `wave_intensity` | `calm`\|`normal`\|`lively`\|`choppy` (or a number 0..2) | `normal` | Scales wave amplitude. YAML users can set a raw number for finer control. |
 | `show_fish` | boolean | `false` | Set `true` to add a couple of fish swimming back and forth inside the water. |
 | `show_history` | boolean | `false` | Set `true` to show a history sparkline below each well. Fetched from HA's recorder, refreshed every ~5 minutes. |

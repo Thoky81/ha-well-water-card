@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v37
+ * Well Water Level Card  — v38
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=37   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=38   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -248,6 +248,16 @@ function defaultWell(n) {
   };
 }
 
+// Wave animation budget. Every wave frame costs the browser a repaint, so the
+// animation runs at a fixed, low frame rate (the motion is slow enough that
+// 20 fps looks the same as 60) and its speed depends on time, not on the
+// display's refresh rate (120 Hz screens used to run it 2× faster and 2× as
+// expensive). It pauses off-screen and honours "Reduce motion". The bigger
+// Safari cost, layout, is avoided by pinning the SVGs (see _pinSvgs).
+const WAVE_FPS       = 20;
+const WAVE_DEG_PER_S = 22.8;   // = the old 0.38° per frame at 60 Hz
+const REDUCED_MOTION = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Card element
 // ─────────────────────────────────────────────────────────────────────────────
@@ -338,6 +348,8 @@ class WellWaterCard extends HTMLElement {
       }, config);
     }
     this._queue();
+    // The editor toggles `animate` through setConfig: start or stop right away.
+    if (this._canAnimate()) this._startAnim(); else this._stopAnim();
   }
 
   set hass(hass) {
@@ -396,8 +408,40 @@ class WellWaterCard extends HTMLElement {
     return out;
   }
 
-  connectedCallback()    { this._startAnim(); }
-  disconnectedCallback() { cancelAnimationFrame(this._animId); }
+  connectedCallback() {
+    // Animate only while the card is (nearly) on screen.
+    if (!this._io && typeof IntersectionObserver === "function") {
+      this._io = new IntersectionObserver((entries) => {
+        this._onScreen = entries.some(e => e.isIntersecting);
+        if (this._canAnimate()) this._startAnim(); else this._stopAnim();
+      }, { rootMargin: "100px" });
+    }
+    if (this._io) this._io.observe(this);
+    // Re-pin the animated SVGs when the card's width changes (window resize,
+    // sidebar, column changes); also catches the first real layout.
+    if (!this._ro && typeof ResizeObserver === "function") {
+      this._ro = new ResizeObserver((entries) => {
+        this._width = entries[entries.length - 1].contentRect.width;
+        if (this._width && (!this._pinCache || this._pinCache.width !== this._width) && this._canAnimate()) this._pinSvgs();
+      });
+    }
+    if (this._ro) this._ro.observe(this);
+    if (REDUCED_MOTION && !this._onMotionPref) {
+      this._onMotionPref = () => { if (this._canAnimate()) this._startAnim(); else this._stopAnim(); };
+      REDUCED_MOTION.addEventListener("change", this._onMotionPref);
+    }
+    this._startAnim();
+  }
+
+  disconnectedCallback() {
+    this._stopAnim();
+    if (this._io) this._io.disconnect();
+    if (this._ro) this._ro.disconnect();
+    if (REDUCED_MOTION && this._onMotionPref) {
+      REDUCED_MOTION.removeEventListener("change", this._onMotionPref);
+      this._onMotionPref = null;
+    }
+  }
 
   // Pull state history for the configured entities from HA's recorder and
   // stash it on `this._historyData` keyed by entity_id. Result format (newer
@@ -511,58 +555,130 @@ class WellWaterCard extends HTMLElement {
     }
   }
 
-  _startAnim() {
-    const tick = () => {
-      this._animId = requestAnimationFrame(tick);
-      // Check the flag at tick time so the checkbox takes effect immediately
-      // without restarting anything.
-      if (this._config && this._config.animate === false) return;
-      this._wave = (this._wave + 0.38) % 360;
-      // Each path carries its own water-body height via data-h — dual mode
-      // can have two wells at different levels, so a single `d` for all
-      // .wp1 paths doesn't cut it.
-      this.shadowRoot.querySelectorAll(".wp1").forEach(e => {
-        const h = parseFloat(e.dataset.h) || 0;
-        e.setAttribute("d", this._wavePath(this._wave, 0, h));
-      });
-      // Fish animation — smooth pseudo-random motion driven by a blend of
-      // sines at co-prime-ish frequencies. Each fish has its own seed so the
-      // pair never moves in lockstep, and the pattern doesn't visibly repeat.
-      // Facing flips based on instantaneous horizontal velocity sign.
-      const ts = performance.now() / 1000;
-      this.shadowRoot.querySelectorAll(".fish").forEach(f => {
-        const seed  = parseFloat(f.dataset.seed)   || 0;
-        const xR    = parseFloat(f.dataset.xrange) || 0;
-        const yR    = parseFloat(f.dataset.yrange) || 0;
-        const speed = parseFloat(f.dataset.speed)  || 1;
-        // Sample two nearby phases — current and slightly earlier — so we can
-        // derive direction (flip) from the sign of dx/dt without extra state.
-        const xAt = s => {
-          // 4 sines, incommensurate frequencies, clamped into [0,1].
-          const raw = 0.5
-            + 0.30 * Math.sin(s * 0.51 + seed)
-            + 0.14 * Math.sin(s * 1.13 + seed * 1.7 + 0.9)
-            + 0.08 * Math.sin(s * 2.27 + seed * 0.6 + 2.1)
-            + 0.05 * Math.sin(s * 3.41 + seed * 2.3);
-          return Math.max(0, Math.min(1, raw));
-        };
-        const yAt = s =>
-          0.55 * Math.sin(s * 0.73 + seed * 1.3 + 1.7) +
-          0.35 * Math.sin(s * 1.57 + seed * 0.9) +
-          0.15 * Math.sin(s * 2.91 + seed * 2.1 + 0.4);
+  // Safari/WebKit: when an SVG in the normal flow changes, WebKit re-lays-out
+  // the whole dashboard (~65 ms per wave frame on a busy view; Chrome doesn't).
+  // An absolutely positioned SVG is laid out on its own, so the animated SVGs
+  // are pinned where the browser put them: measure once, then position:absolute
+  // with the same box, the slot keeping its size. Re-renders reuse the measured
+  // boxes (measuring forces a full layout); a width change measures again.
+  _animatedSvgs() {
+    const svgs = new Set();
+    this.shadowRoot.querySelectorAll(".wp1, .fish").forEach(e => { if (e.ownerSVGElement) svgs.add(e.ownerSVGElement); });
+    return [...svgs];
+  }
 
-        const s  = ts * 0.22 * speed + seed;
-        const sPrev = s - 0.1;
-        const xn   = xAt(s);
-        const xnP  = xAt(sPrev);
-        const yn   = Math.max(-1, Math.min(1, yAt(s)));
-        const x    = xn * xR;
-        const y    = yn * yR;
-        const flip = xn >= xnP ? 1 : -1;
-        f.setAttribute("transform", "translate(" + x.toFixed(2) + "," + y.toFixed(2) + ") scale(" + flip + ",1)");
-      });
+  _pinSvgs() {
+    this._pinTry = performance.now();
+    const svgs = this._animatedSvgs();
+    if (!svgs.length) return;
+    for (const s of svgs) {                       // back to the natural layout
+      s.style.position = s.style.left = s.style.top = s.style.width = s.style.height = "";
+      const slot = s.parentElement;
+      slot.style.position = slot.style.minWidth = slot.style.minHeight = "";
+    }
+    const boxes = [];                             // read everything, then write
+    for (const s of svgs) {
+      const slot = s.parentElement, wb = slot.getBoundingClientRect(), b = s.getBoundingClientRect();
+      if (!b.width || !b.height || !slot.offsetWidth) return;     // not laid out yet (hidden): retry later
+      const k = wb.width / slot.offsetWidth;                      // zoomed/transformed ancestors
+      boxes.push([(b.left - wb.left) / k - slot.clientLeft,       // absolute offsets start inside the border
+                  (b.top - wb.top) / k - slot.clientTop,
+                  b.width / k, b.height / k, wb.width / k, wb.height / k]);
+    }
+    if (!this._width) this._width = this.offsetWidth;
+    this._pinCache = { width: this._width, boxes };
+    this._applyPin();
+  }
+
+  // Writes only, no layout reads: true when the cached boxes fit this render.
+  _applyPin() {
+    const c = this._pinCache, svgs = this._animatedSvgs();
+    if (!c || c.width !== this._width || c.boxes.length !== svgs.length) return (this._pinned = false);
+    svgs.forEach((s, i) => {
+      const [x, y, w, h, sw, sh] = c.boxes[i], slot = s.parentElement;
+      slot.style.position = "relative";
+      slot.style.minWidth = sw + "px";
+      slot.style.minHeight = sh + "px";
+      Object.assign(s.style, { position: "absolute", left: x + "px", top: y + "px", width: w + "px", height: h + "px" });
+    });
+    return (this._pinned = true);
+  }
+
+  _canAnimate() {
+    return this.isConnected && !!this._config && this._config.animate !== false &&
+           this._onScreen !== false && !(REDUCED_MOTION && REDUCED_MOTION.matches);
+  }
+
+  _stopAnim() {
+    if (this._animId) cancelAnimationFrame(this._animId);
+    this._animId = null;
+  }
+
+  // One requestAnimationFrame loop per card, running only while _canAnimate();
+  // frames are drawn at WAVE_FPS and skipped in between.
+  _startAnim() {
+    if (this._animId || !this._canAnimate()) return;
+    if (!this._pinned && !this._applyPin()) this._pinSvgs();
+    const frameMs = 1000 / WAVE_FPS;
+    const tick = (now) => {
+      this._animId = null;
+      if (!this._canAnimate()) return;
+      this._animId = requestAnimationFrame(tick);
+      if (now - (this._lastFrame || 0) < frameMs) return;
+      this._lastFrame = now;
+      // The first render can happen before the SVGs have a size; retry the
+      // pin (it measures, i.e. forces a layout) at most once per second.
+      if (!this._pinned && now - (this._pinTry || 0) > 1000) this._pinSvgs();
+      this._drawFrame(now);
     };
     this._animId = requestAnimationFrame(tick);
+  }
+
+  _drawFrame(now) {
+    this._wave = (now / 1000 * WAVE_DEG_PER_S) % 360;
+    // Each path carries its own water-body height via data-h — dual mode
+    // can have two wells at different levels, so a single `d` for all
+    // .wp1 paths doesn't cut it.
+    this.shadowRoot.querySelectorAll(".wp1").forEach(e => {
+      const h = parseFloat(e.dataset.h) || 0;
+      e.setAttribute("d", this._wavePath(this._wave, 0, h));
+    });
+    // Fish animation — smooth pseudo-random motion driven by a blend of
+    // sines at co-prime-ish frequencies. Each fish has its own seed so the
+    // pair never moves in lockstep, and the pattern doesn't visibly repeat.
+    // Facing flips based on instantaneous horizontal velocity sign.
+    const ts = performance.now() / 1000;
+    this.shadowRoot.querySelectorAll(".fish").forEach(f => {
+      const seed  = parseFloat(f.dataset.seed)   || 0;
+      const xR    = parseFloat(f.dataset.xrange) || 0;
+      const yR    = parseFloat(f.dataset.yrange) || 0;
+      const speed = parseFloat(f.dataset.speed)  || 1;
+      // Sample two nearby phases — current and slightly earlier — so we can
+      // derive direction (flip) from the sign of dx/dt without extra state.
+      const xAt = s => {
+        // 4 sines, incommensurate frequencies, clamped into [0,1].
+        const raw = 0.5
+          + 0.30 * Math.sin(s * 0.51 + seed)
+          + 0.14 * Math.sin(s * 1.13 + seed * 1.7 + 0.9)
+          + 0.08 * Math.sin(s * 2.27 + seed * 0.6 + 2.1)
+          + 0.05 * Math.sin(s * 3.41 + seed * 2.3);
+        return Math.max(0, Math.min(1, raw));
+      };
+      const yAt = s =>
+        0.55 * Math.sin(s * 0.73 + seed * 1.3 + 1.7) +
+        0.35 * Math.sin(s * 1.57 + seed * 0.9) +
+        0.15 * Math.sin(s * 2.91 + seed * 2.1 + 0.4);
+
+      const s  = ts * 0.22 * speed + seed;
+      const sPrev = s - 0.1;
+      const xn   = xAt(s);
+      const xnP  = xAt(sPrev);
+      const yn   = Math.max(-1, Math.min(1, yAt(s)));
+      const x    = xn * xR;
+      const y    = yn * yR;
+      const flip = xn >= xnP ? 1 : -1;
+      f.setAttribute("transform", "translate(" + x.toFixed(2) + "," + y.toFixed(2) + ") scale(" + flip + ",1)");
+    });
   }
 
   // The wave path IS the water body: wavy top oscillates around y=0,
@@ -1668,6 +1784,9 @@ class WellWaterCard extends HTMLElement {
       if (this._configIncomplete()) { this._renderPlaceholder(); return; }
       if (this._config.layout === "dual") this._renderDual();
       else this._renderSingle();
+      // fresh SVGs: reuse the measured boxes, or let the next frame measure
+      this._pinned = false;
+      if (this._canAnimate() && !this._applyPin()) this._pinTry = 0;
     } catch (e) {
       console.error("[well-water-card] Render error:", e);
       this.shadowRoot.innerHTML = "<ha-card style='padding:16px;color:red;font-family:monospace;font-size:12px;'>[well-water-card] Render error: " + e.message + "</ha-card>";
