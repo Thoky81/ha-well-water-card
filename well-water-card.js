@@ -1,10 +1,10 @@
 /**
- * Well Water Level Card  — v38
+ * Well Water Level Card  — v39
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
  *  2. Settings → Dashboards → Resources → Add
- *     URL: /local/well-water-card.js?v=38   ← version param busts the cache
+ *     URL: /local/well-water-card.js?v=39   ← version param busts the cache
  *     Type: JavaScript module
  *  3. Hard-refresh the browser (Ctrl + Shift + R)
  *
@@ -258,6 +258,34 @@ const WAVE_FPS       = 20;
 const WAVE_DEG_PER_S = 22.8;   // = the old 0.38° per frame at 60 Hz
 const REDUCED_MOTION = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
 
+// Make `parent`'s children match `next`'s, changing only what differs.
+// Nodes of another type or tag, or a different number of children, are
+// replaced wholesale. keepAttr(el, name) protects attributes set at runtime.
+function patchChildren(parent, next, keepAttr) {
+  const cur = parent.childNodes, nxt = next.childNodes;
+  if (cur.length !== nxt.length) { parent.replaceChildren(...nxt); return; }
+  // backwards: replaceWith() moves the node out of `next`
+  for (let i = nxt.length - 1; i >= 0; i--) patchNode(cur[i], nxt[i], keepAttr);
+}
+
+function patchNode(cur, next, keepAttr) {
+  if (cur.nodeType !== next.nodeType || cur.nodeName !== next.nodeName) { cur.replaceWith(next); return; }
+  if (cur.nodeType !== 1) {
+    if (cur.nodeValue !== next.nodeValue) cur.nodeValue = next.nodeValue;
+    return;
+  }
+  for (const { name, value } of [...next.attributes]) {
+    if (cur.getAttribute(name) !== value && !keepAttr(cur, name)) cur.setAttribute(name, value);
+  }
+  // custom elements (ha-card, ha-icon) may add attributes of their own
+  if (!cur.localName.includes("-")) {
+    for (const { name } of [...cur.attributes]) {
+      if (!next.hasAttribute(name) && !keepAttr(cur, name)) cur.removeAttribute(name);
+    }
+  }
+  patchChildren(cur, next, keepAttr);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Card element
 // ─────────────────────────────────────────────────────────────────────────────
@@ -347,6 +375,9 @@ class WellWaterCard extends HTMLElement {
         title_color:     null,
       }, config);
     }
+    // A new config can change the whole layout: rebuild and measure again.
+    this._fullRender = true;
+    this._pinCache = null;
     this._queue();
     // The editor toggles `animate` through setConfig: start or stop right away.
     if (this._canAnimate()) this._startAnim(); else this._stopAnim();
@@ -417,12 +448,12 @@ class WellWaterCard extends HTMLElement {
       }, { rootMargin: "100px" });
     }
     if (this._io) this._io.observe(this);
-    // Re-pin the animated SVGs when the card's width changes (window resize,
-    // sidebar, column changes); also catches the first real layout.
+    // Re-pin the SVGs when the card's width changes (window resize, sidebar,
+    // column changes); also catches the first real layout.
     if (!this._ro && typeof ResizeObserver === "function") {
       this._ro = new ResizeObserver((entries) => {
         this._width = entries[entries.length - 1].contentRect.width;
-        if (this._width && (!this._pinCache || this._pinCache.width !== this._width) && this._canAnimate()) this._pinSvgs();
+        if (this._width && (!this._pinCache || this._pinCache.width !== this._width)) this._pinSvgs();
       });
     }
     if (this._ro) this._ro.observe(this);
@@ -481,11 +512,25 @@ class WellWaterCard extends HTMLElement {
 
   // Render a small line+area sparkline for one entity. Width is 100% via
   // preserveAspectRatio='none' — the parent flex column sets the actual px.
+  //
+  // Built once per history fetch (cached on the data array) and reduced to
+  // the lowest and highest value per viewBox unit: a sensor reporting every
+  // 10 s has ~19,000 points in 72 h, which used to be rebuilt on every
+  // reading and drawn as one huge path.
   _sparkline(entityId, t, color, opts) {
     const h       = (opts && opts.height) || 46;
     const vbW     = 240;
     const data    = this._historyData && this._historyData[entityId];
     if (!data || data.length < 2) return this._sparklineEmpty(t, h, "loading…");
+    const key = entityId + "|" + h + "|" + color;
+    const hit = this._sparkCache && this._sparkCache[key];
+    if (hit && hit.data === data) return hit.html;
+    const html = this._sparklineSvg(data, t, color, h, vbW);
+    (this._sparkCache || (this._sparkCache = {}))[key] = { data, html };
+    return html;
+  }
+
+  _sparklineSvg(data, t, color, h, vbW) {
     const pts = [];
     for (const p of data) {
       const v = parseFloat(p.s);
@@ -501,10 +546,24 @@ class WellWaterCard extends HTMLElement {
     const PAD  = 3;
     const plotH = h - PAD * 2;
 
+    // keep first, lowest, highest and last point of each viewBox unit, in time order
+    const keep = [];
+    for (let i = 0, bucket = -1, lo, hi, first, last; i <= pts.length; i++) {
+      const b = i < pts.length ? Math.min(vbW - 1, Math.floor(((pts[i].t - tMin) / tRng) * vbW)) : -2;
+      if (b !== bucket) {
+        if (bucket >= 0) [...new Set([first, lo, hi, last])].sort((a, z) => a - z).forEach(j => keep.push(pts[j]));
+        bucket = b; first = lo = hi = last = i;
+      } else {
+        last = i;
+        if (pts[i].v < pts[lo].v) lo = i;
+        if (pts[i].v > pts[hi].v) hi = i;
+      }
+    }
+
     let line = "";
-    for (let i = 0; i < pts.length; i++) {
-      const x = ((pts[i].t - tMin) / tRng) * vbW;
-      const y = PAD + (1 - (pts[i].v - vMin) / vRng) * plotH;
+    for (let i = 0; i < keep.length; i++) {
+      const x = ((keep[i].t - tMin) / tRng) * vbW;
+      const y = PAD + (1 - (keep[i].v - vMin) / vRng) * plotH;
       line += (i === 0 ? "M" : " L") + x.toFixed(1) + "," + y.toFixed(1);
     }
     const area = line + " L" + vbW + "," + h + " L0," + h + " Z";
@@ -556,21 +615,22 @@ class WellWaterCard extends HTMLElement {
   }
 
   // Safari/WebKit: when an SVG in the normal flow changes, WebKit re-lays-out
-  // the whole dashboard (~65 ms per wave frame on a busy view; Chrome doesn't).
-  // An absolutely positioned SVG is laid out on its own, so the animated SVGs
-  // are pinned where the browser put them: measure once, then position:absolute
-  // with the same box, the slot keeping its size. Re-renders reuse the measured
-  // boxes (measuring forces a full layout); a width change measures again.
-  _animatedSvgs() {
+  // the whole dashboard (~65 ms per change on a busy view; Chrome doesn't).
+  // That happens on every wave frame and on every new reading (the water
+  // height is drawn in the SVG). An absolutely positioned SVG is laid out on
+  // its own, so the water SVGs are pinned where the browser put them: measure
+  // once, then position:absolute with the same box, the slot keeping its size.
+  // Re-renders reuse the measured boxes (measuring forces a full layout); a
+  // width change measures again.
+  _waterSvgs() {
     const svgs = new Set();
     this.shadowRoot.querySelectorAll(".wp1, .fish").forEach(e => { if (e.ownerSVGElement) svgs.add(e.ownerSVGElement); });
     return [...svgs];
   }
 
   _pinSvgs() {
-    this._pinTry = performance.now();
-    const svgs = this._animatedSvgs();
-    if (!svgs.length) return;
+    const svgs = this._waterSvgs();
+    if (!svgs.length || !this.isConnected) return;
     for (const s of svgs) {                       // back to the natural layout
       s.style.position = s.style.left = s.style.top = s.style.width = s.style.height = "";
       const slot = s.parentElement;
@@ -579,7 +639,7 @@ class WellWaterCard extends HTMLElement {
     const boxes = [];                             // read everything, then write
     for (const s of svgs) {
       const slot = s.parentElement, wb = slot.getBoundingClientRect(), b = s.getBoundingClientRect();
-      if (!b.width || !b.height || !slot.offsetWidth) return;     // not laid out yet (hidden): retry later
+      if (!b.width || !b.height || !slot.offsetWidth) { this._retryPin(); return; }  // not laid out yet
       const k = wb.width / slot.offsetWidth;                      // zoomed/transformed ancestors
       boxes.push([(b.left - wb.left) / k - slot.clientLeft,       // absolute offsets start inside the border
                   (b.top - wb.top) / k - slot.clientTop,
@@ -587,21 +647,52 @@ class WellWaterCard extends HTMLElement {
     }
     if (!this._width) this._width = this.offsetWidth;
     this._pinCache = { width: this._width, boxes };
+    this._pinTries = 0;
     this._applyPin();
+  }
+
+  // The first render can happen before the SVGs have a size: try again later
+  // (each try measures, i.e. forces a layout), at most once a second, 30 times.
+  _retryPin() {
+    if (this._pinTimer || (this._pinTries = (this._pinTries || 0) + 1) > 30) return;
+    this._pinTimer = setTimeout(() => { this._pinTimer = null; if (!this._pinned) this._pinSvgs(); }, 1000);
   }
 
   // Writes only, no layout reads: true when the cached boxes fit this render.
   _applyPin() {
-    const c = this._pinCache, svgs = this._animatedSvgs();
+    const c = this._pinCache, svgs = this._waterSvgs();
     if (!c || c.width !== this._width || c.boxes.length !== svgs.length) return (this._pinned = false);
     svgs.forEach((s, i) => {
+      // already pinned to this box (a patched render keeps the elements):
+      // don't write again, WebKit re-lays-out even for unchanged values
+      if (s.__pinBox === c.boxes[i] && s.parentElement.__pinned) return;
       const [x, y, w, h, sw, sh] = c.boxes[i], slot = s.parentElement;
+      s.__pinBox = c.boxes[i];
       slot.style.position = "relative";
       slot.style.minWidth = sw + "px";
       slot.style.minHeight = sh + "px";
       Object.assign(s.style, { position: "absolute", left: x + "px", top: y + "px", width: w + "px", height: h + "px" });
+      s.__pinned = slot.__pinned = true;          // _patch leaves their style alone
     });
     return (this._pinned = true);
+  }
+
+  // Full rebuild after setConfig; otherwise patch the existing DOM so a new
+  // reading changes only what differs (the numbers, the bar, the water).
+  // Rebuilding replaced everything, ha-card included, and made WebKit restyle
+  // and re-lay-out the dashboard (~110-150 ms on a busy view) every report.
+  _setHtml(html) {
+    if (this._fullRender || !this.shadowRoot.firstChild) {
+      this._fullRender = false;
+      this.shadowRoot.innerHTML = html;
+      return;
+    }
+    const tpl = document.createElement("template");
+    tpl.innerHTML = html;
+    patchChildren(this.shadowRoot, tpl.content, (el, name) =>
+      (name === "style" && el.__pinned) ||                        // set by _applyPin
+      (!!this._animId && ((name === "d" && el.classList.contains("wp1")) ||
+                          (name === "transform" && el.classList.contains("fish")))));  // owned by the animation
   }
 
   _canAnimate() {
@@ -626,9 +717,6 @@ class WellWaterCard extends HTMLElement {
       this._animId = requestAnimationFrame(tick);
       if (now - (this._lastFrame || 0) < frameMs) return;
       this._lastFrame = now;
-      // The first render can happen before the SVGs have a size; retry the
-      // pin (it measures, i.e. forces a layout) at most once per second.
-      if (!this._pinned && now - (this._pinTry || 0) > 1000) this._pinSvgs();
       this._drawFrame(now);
     };
     this._animId = requestAnimationFrame(tick);
@@ -1685,7 +1773,8 @@ class WellWaterCard extends HTMLElement {
       ".card { background: " + t.cardBg + "; border: " + t.cardBorder + "; border-radius: 16px; color: " + t.textBody + "; position: relative; overflow: hidden; box-sizing: border-box; contain: layout paint; overflow-anchor: none; }" +
       ".card::before { content: ''; position: absolute; inset: 0; background: " + t.glow + "; pointer-events: none; }" +
       ".divider { height: 1px; background: " + t.divider + "; margin: 11px 0; }" +
-      ".bar-w { height: 4px; background: " + t.barBg + "; border-radius: 2px; overflow: hidden; }" +
+      // contained like the level number: the bar moves with every reading
+      ".bar-w { height: 4px; background: " + t.barBg + "; border-radius: 2px; overflow: hidden; contain: size layout style; }" +
       ".bar-f { height: 100%; border-radius: 2px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }" +
       ".mi { display: flex; flex-direction: column; gap: 3px; }" +
       ".ml { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: " + t.textMuted + "; }" +
@@ -1755,12 +1844,22 @@ class WellWaterCard extends HTMLElement {
         "<div style='font-size:" + fsLabel + ";font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:" + t.textMuted + ";'>" + lbl + "</div>" +
         badge +
       "</div>" +
-      "<div style='font-size:" + fsBig + ";font-weight:700;color:" + col + ";line-height:1;letter-spacing:-.02em;text-shadow:0 0 20px " + glow + ";'>" +
-        (level !== null ? uFmt(level, unit) : "—") +
-        "<span style='font-size:" + fsSmall + ";color:" + t.textMuted + ";margin-left:2px;'>" + ul + "</span>" +
+      // Fixed height (= font size at line-height 1) with the value absolutely
+      // positioned inside: a new reading changes it without re-laying-out the
+      // dashboard (Safari). CSS containment here would make WebKit fall back
+      // to a full layout as soon as anything else in the card changes too.
+      "<div style='position:relative;font-size:" + fsBig + ";height:" + fsBig + ";font-weight:700;color:" + col + ";line-height:1;letter-spacing:-.02em;text-shadow:0 0 20px " + glow + ";'>" +
+        "<span style='position:absolute;left:0;top:0;white-space:nowrap;'>" +
+          (level !== null ? uFmt(level, unit) : "—") +
+          "<span style='font-size:" + fsSmall + ";color:" + t.textMuted + ";margin-left:2px;'>" + ul + "</span>" +
+        "</span>" +
       "</div>" +
-      "<div style='font-size:" + fsSmall + ";color:" + t.textSub + ";margin-top:" + (compact?"3px":"4px") + ";margin-bottom:" + (compact?"8px":"12px") + ";'>" +
-        (level !== null ? Math.round(pct) + "% capacity" : "—") +
+      // The longest text, invisible, sizes the box; the real text sits on top
+      // of it absolutely positioned, so a new percentage doesn't re-lay-out
+      // the dashboard (Safari). It wraps like the visible text would.
+      "<div style='position:relative;font-size:" + fsSmall + ";color:" + t.textSub + ";margin-top:" + (compact?"3px":"4px") + ";margin-bottom:" + (compact?"8px":"12px") + ";'>" +
+        "<span style='visibility:hidden;'>100% capacity</span>" +
+        "<span style='position:absolute;left:0;top:0;right:0;'>" + (level !== null ? Math.round(pct) + "% capacity" : "—") + "</span>" +
       "</div>" +
       "<div class='bar-w'><div class='bar-f' style='width:" + pct + "%;background:linear-gradient(90deg," + col + "88," + col + ");'></div></div>" +
       bottomRow
@@ -1784,9 +1883,9 @@ class WellWaterCard extends HTMLElement {
       if (this._configIncomplete()) { this._renderPlaceholder(); return; }
       if (this._config.layout === "dual") this._renderDual();
       else this._renderSingle();
-      // fresh SVGs: reuse the measured boxes, or let the next frame measure
+      // reuse the measured boxes, or measure once the SVGs have a size
       this._pinned = false;
-      if (this._canAnimate() && !this._applyPin()) this._pinTry = 0;
+      if (!this._applyPin()) this._retryPin();
     } catch (e) {
       console.error("[well-water-card] Render error:", e);
       this.shadowRoot.innerHTML = "<ha-card style='padding:16px;color:red;font-family:monospace;font-size:12px;'>[well-water-card] Render error: " + e.message + "</ha-card>";
@@ -1871,7 +1970,7 @@ class WellWaterCard extends HTMLElement {
     // Tighter top padding when there's no header to compensate.
     const cardPad = showTitle ? "20px 24px 24px" : "16px 24px 22px";
 
-    this.shadowRoot.innerHTML =
+    this._setHtml(
       "<style>" + this._css(t) +
       ".card{padding:" + cardPad + ";container-type:inline-size;}" +
       ".hdr{margin-bottom:14px;}" +
@@ -1888,7 +1987,7 @@ class WellWaterCard extends HTMLElement {
       "<ha-card><div class='card'>" +
         header +
         "<div class='body'>" + bodyContent + "</div>" +
-      "</div></ha-card>";
+      "</div></ha-card>");
   }
 
   _renderDual() {
@@ -1952,7 +2051,7 @@ class WellWaterCard extends HTMLElement {
     // Side-by-side: two equal columns; stacked: single column
     const gridClass = stacked ? "grid stacked" : "grid sbs";
 
-    this.shadowRoot.innerHTML =
+    this._setHtml(
       "<style>" + this._css(t) +
       ".card{padding:16px 18px 20px;container-type:inline-size;}" +
       ".chdr{display:flex;align-items:center;margin-bottom:14px;}" +
@@ -1976,7 +2075,7 @@ class WellWaterCard extends HTMLElement {
           "<div class='col0'>" + wellHtml(d0, 0) + "</div>" +
           "<div class='col1'>" + wellHtml(d1, 1) + "</div>" +
         "</div>" +
-      "</div></ha-card>";
+      "</div></ha-card>");
   }
 
   // ── Card metadata ────────────────────────────────────────────────────────────
