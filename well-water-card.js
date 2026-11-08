@@ -1,5 +1,5 @@
 /**
- * Well Water Level Card  — v39
+ * Well Water Level Card  — v40
  * ──────────────────────────────────────────────────────────────────────────────
  * INSTALLATION (manual)
  *  1. Copy to /config/www/well-water-card.js
@@ -569,7 +569,9 @@ class WellWaterCard extends HTMLElement {
     const area = line + " L" + vbW + "," + h + " L0," + h + " Z";
 
     return (
-      "<svg width='100%' height='" + h + "' viewBox='0 0 " + vbW + " " + h + "' preserveAspectRatio='none' style='display:block;'>" +
+      // Inline size: the card-wide "svg { width:auto; height:auto }" rule (for the well drawings)
+      // would otherwise shrink the graph to its 240-unit viewBox instead of the full column width.
+      "<svg width='100%' height='" + h + "' viewBox='0 0 " + vbW + " " + h + "' preserveAspectRatio='none' style='display:block;width:100%;height:" + h + "px;max-height:none;'>" +
         "<path d='" + area + "' fill='" + color + "' opacity='.16'/>" +
         "<path d='" + line + "' fill='none' stroke='" + color + "' stroke-width='1.5' stroke-linejoin='round' stroke-linecap='round' vector-effect='non-scaling-stroke'/>" +
       "</svg>"
@@ -1724,6 +1726,22 @@ class WellWaterCard extends HTMLElement {
     );
   }
 
+  // The classic wells right-align their scale labels just left of the shaft (x = SX - 12:
+  // 14 in the large drawings, 6 in the small ones), so a label like "6.00" starts at a
+  // negative x and was clipped by the viewBox. Widen the SVG to the left by what the
+  // longest label needs (monospace: about 0.62 em per character).
+  _padClassic(svg, d, small) {
+    const fs = small ? 8 : 9, end = small ? 6 : 14;
+    let maxLen = 0;
+    for (const f of [0, 0.25, 0.5, 0.75, 1]) {
+      maxLen = Math.max(maxLen, String(uFmt(d.min + (d.max - d.min) * f, d.unit)).length);
+    }
+    const pad = Math.max(0, Math.ceil(maxLen * fs * 0.62 - end + 2));
+    if (!pad) return svg;
+    return svg.replace(/^<svg width='(\d+)' height='(\d+)' viewBox='0 0 (\d+) (\d+)'>/,
+      (m, w, h, vw, vh) => "<svg width='" + (+w + pad) + "' height='" + h + "' viewBox='" + (-pad) + " 0 " + (+vw + pad) + " " + vh + "'>");
+  }
+
   // ── SVG dispatcher ──────────────────────────────────────────────────────────
   // Routes to the right SVG builder based on well_style. Unknown styles fall
   // back to the modern (dark/light) renderer so existing configs keep working.
@@ -1737,9 +1755,9 @@ class WellWaterCard extends HTMLElement {
     const shaft = this._shaftFor(style);
     const small = size === "small";
     switch (style) {
-      case "classic-pump":    return small ? this._svgPumpSmall(d, idx || 0, shaft)      : this._svgPumpLarge(d, shaft);
-      case "classic-roof":    return small ? this._svgRoofSmall(d, idx || 0, shaft)      : this._svgRoofLarge(d, shaft);
-      case "classic-crank":   return small ? this._svgCrankSmall(d, idx || 0, shaft)     : this._svgCrankLarge(d, shaft);
+      case "classic-pump":    return this._padClassic(small ? this._svgPumpSmall(d, idx || 0, shaft)  : this._svgPumpLarge(d, shaft), d, small);
+      case "classic-roof":    return this._padClassic(small ? this._svgRoofSmall(d, idx || 0, shaft)  : this._svgRoofLarge(d, shaft), d, small);
+      case "classic-crank":   return this._padClassic(small ? this._svgCrankSmall(d, idx || 0, shaft) : this._svgCrankLarge(d, shaft), d, small);
       case "tank-cylinder":   return small ? this._svgTankCylSmall(d, idx || 0, shaft)   : this._svgTankCylLarge(d, shaft);
       case "tank-ibc":        return small ? this._svgTankIbcSmall(d, idx || 0, shaft)   : this._svgTankIbcLarge(d, shaft);
       case "tank-barrel":     return small ? this._svgTankBarrelSmall(d, idx || 0, shaft): this._svgTankBarrelLarge(d, shaft);
